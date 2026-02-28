@@ -27,6 +27,21 @@ agora = datetime.now(fuso_br).replace(tzinfo=None)
 
 GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
+# CSS PARA POSICIONAR ELEMENTOS CONFORME MARCAÇÃO
+st.markdown("""
+    <style>
+        .block-container {padding-top: 0.5rem;}
+        /* Move os botões do Plotly (zoom, etc) para o topo */
+        .modebar-container { top: 0 !important; bottom: auto !important; }
+        .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+        .stTabs [data-baseweb="tab"] { 
+            background-color: #1e1e1e; 
+            border-radius: 4px 4px 0 0; 
+            padding: 5px 15px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 if "auth_ok" not in st.session_state: st.session_state.auth_ok = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
 
@@ -91,7 +106,7 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # ===============================
-# CABEÇALHO
+# CABEÇALHO (RELOGIO NA DIREITA)
 # ===============================
 st.markdown(f"""
     <div style="background-color: #1E1E1E; padding: 10px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
@@ -113,9 +128,9 @@ st.markdown(f"""
 aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
 
 # ===============================
-# FUNÇÃO GANTT OTIMIZADA
+# FUNÇÃO GANTT PERSONALIZADA
 # ===============================
-def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.9):
+def plotar_gantt(lista_maquinas, height_grafico=500):
     df_all = carregar_dados()
     if not df_all.empty:
         df_g = df_all[df_all["maquina"].isin(lista_maquinas)].copy()
@@ -129,44 +144,47 @@ def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.9):
                 color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
             )
             
-            # Eixo X e Linha Vertical
+            # 1. LINHAS HORIZONTAIS DISCRETAS (CONFORME MARCAÇÃO)
+            fig.update_yaxes(
+                autorange="reversed", title="", 
+                showgrid=True, gridcolor='rgba(255,255,255,0.15)', # Linha horizontal
+                tickfont=dict(size=11),
+                zeroline=False
+            )
+            
+            # 2. BARRAS MAIS JUNTAS (GAP MÍNIMO)
+            fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
+
             fig.update_xaxes(
                 type='date', range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], 
                 dtick=10800000, tickformat="%H:%M\n%d/%m", 
                 gridcolor='rgba(255,255,255,0.05)', showgrid=True, tickfont=dict(size=10, color="white")
             )
             
-            # Eixo Y com Linhas Horizontais (Grid) para separar máquinas
-            fig.update_yaxes(
-                autorange="reversed", title="", 
-                showgrid=True, gridcolor='rgba(255,255,255,0.1)', # Linha horizontal discreta
-                tickfont=dict(size=11)
-            )
-            
             fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
             
-            # Texto AGORA na base
+            # 3. RELÓGIO "AGORA" EXATAMENTE ABAIXO DAS DATAS
             fig.add_annotation(
-                x=agora, y=-0.08, text=f"AGORA: {agora.strftime('%H:%M')}", 
+                x=agora, y=-0.18, text=f"AGORA: {agora.strftime('%H:%M')}", 
                 showarrow=False, xref="x", yref="paper", 
-                font=dict(color="red", size=13, family="Arial Black"),
-                bgcolor="rgba(0,0,0,0.8)"
+                font=dict(color="red", size=14, family="Arial Black"),
+                bgcolor="rgba(0,0,0,0.9)", bordercolor="red", borderpad=2
             )
-            
-            # Ajuste de Proximidade das Barras
-            fig.update_traces(textposition='inside', insidetextanchor='start', width=espessura_barra)
             
             fig.update_layout(
                 height=height_grafico, 
-                margin=dict(l=10, r=10, t=20, b=50), 
+                margin=dict(l=10, r=10, t=50, b=100), # Margem superior para botões, inferior para o relógio
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)',
-                bargap=0.05, # Espaço mínimo entre barras de máquinas diferentes
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                bargap=0.01, # Coloca as máquinas uma encostada na outra
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                modebar=dict(orientation='h', bgcolor='rgba(0,0,0,0)') # Estilo da barra de ferramentas
             )
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # 4. BOTÕES DE ZOOM E TOOLS NO TOPO (VIA CONFIG)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
 
-            # --- INDICADORES ---
+            # INDICADORES ABAIXO DO GRÁFICO
             st.markdown("---")
             atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
             maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
@@ -176,14 +194,14 @@ def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.9):
             c1.metric("🚨 OPs ATRASADAS", f"{atrasadas}")
             c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
             if ociosas:
-                c3.warning(f"Atenção: {len(ociosas)} máquinas sem carga")
+                c3.warning(f"{len(ociosas)} máquinas livres")
                 with st.expander("Ver máquinas ociosas"):
                     st.write(", ".join(ociosas))
             else:
                 c3.success("✅ Setor 100% Ocupado")
 
-with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=400)
-with aba6: plotar_gantt(MAQUINAS_SOPRO, height_grafico=1000, espessura_barra=0.9)
+with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=450)
+with aba6: plotar_gantt(MAQUINAS_SOPRO, height_grafico=1100)
 
 with aba1:
     with st.container(border=True):
@@ -239,4 +257,4 @@ with aba5:
         st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
 
 st.divider()
-st.caption(f"v3.9.8 | Refresh 2min | {agora.strftime('%H:%M:%S')}")
+st.caption(f"v4.2 | Refresh 2min | {agora.strftime('%H:%M:%S')}")

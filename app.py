@@ -67,8 +67,9 @@ def carregar_dados():
         df["inicio"] = pd.to_datetime(df["inicio"])
         df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
-        df["inicio_format"] = df["inicio"].dt.strftime('%d/%m %H:%M')
-        df["fim_format"] = df["fim"].dt.strftime('%d/%m %H:%M')
+        # Formatações para o Tooltip (Card)
+        df["hora_ini"] = df["inicio"].dt.strftime('%H:%M')
+        df["hora_fim"] = df["fim"].dt.strftime('%H:%M')
         df["rotulo_grafico"] = df.apply(lambda r: "SETUP" if r['status'] == "Setup" else f"{r['pedido']} | {int(r['qtd'])}", axis=1)
     return df
 
@@ -145,21 +146,33 @@ with aba1:
                                 (maq_av, "SETUP", desc_av, i_av.strftime('%Y-%m-%d %H:%M:%S'), f_av.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
                 st.rerun()
 
-# --- ABA 2: GANTT (PRESERVADA COM RELÓGIO) ---
+# --- ABA 2: GANTT (CORREÇÃO DO TOOLTIP/CARD) ---
 with aba2:
     st.subheader("Cronograma Real-Time")
     df_g = carregar_dados()
     if not df_g.empty:
         df_g["status_cor"] = df_g["status"]
         df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
-        fig = px.timeline(df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="rotulo_grafico",
-                         category_orders={"maquina": MAQUINAS},
-                         custom_data=["pedido", "inicio_format", "fim_format", "item", "qtd"],
-                         color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"})
+        
+        # Ajuste do Tooltip para mostrar os dados conforme sua imagem
+        fig = px.timeline(
+            df_g, x_start="inicio", x_end="fim", y="maquina", 
+            color="status_cor", text="rotulo_grafico",
+            category_orders={"maquina": MAQUINAS},
+            custom_data=["pedido", "hora_ini", "hora_fim", "item", "qtd"],
+            color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
+        )
+        
+        # Formatação do balão (Tooltip) idêntica ao seu desenho
+        fig.update_traces(
+            hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Cód: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>"
+        )
+
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
         fig.add_annotation(x=agora, y=1, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, yref="paper", font=dict(color="red"))
         fig.update_yaxes(autorange="reversed")
         st.plotly_chart(fig, use_container_width=True)
+
     cols_st = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
@@ -167,7 +180,7 @@ with aba2:
         elif not df_m[df_m["fim"] < agora].empty: cols_st[i].error(f"🚨 {m.upper()}\n\nATRASO")
         else: cols_st[i].success(f"✅ {m.upper()}\n\nEm Dia")
 
-# --- ABA 3: GERENCIAR (NOVIDADE: EDIÇÃO DE QUANTIDADE) ---
+# --- ABA 3: GERENCIAR (PRESERVADA COM EDIÇÃO DE QTD) ---
 with aba3:
     df_ger = carregar_dados()
     t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])
@@ -205,13 +218,10 @@ with aba3:
                             st.write("**Ajustar Quantidade**")
                             nova_qtd = st.number_input("Qtd", value=float(r['qtd']), key=f"q_ed_{r['id']}")
                             if st.button("Atualizar Qtd", key=f"bq_ed_{r['id']}", use_container_width=True):
-                                # Recalcula tempo baseado na nova quantidade
                                 novo_fim = r['inicio'] + timedelta(hours=nova_qtd/CADENCIA_PADRAO)
                                 seg_dif = (novo_fim - r['fim']).total_seconds()
                                 with conectar() as c:
-                                    # Atualiza o pedido
                                     c.execute("UPDATE agenda SET qtd=?, fim=? WHERE id=?", (nova_qtd, novo_fim.strftime('%Y-%m-%d %H:%M:%S'), r['id']))
-                                    # Empurra o setup vinculado para começar exatamente após o novo fim
                                     c.execute("UPDATE agenda SET inicio = ?, fim = datetime(fim, ? || ' seconds') WHERE vinculo_id = ?", 
                                               (novo_fim.strftime('%Y-%m-%d %H:%M:%S'), seg_dif, r['id']))
                                 st.rerun()

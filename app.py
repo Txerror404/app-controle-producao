@@ -93,7 +93,7 @@ st.markdown(f"""
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
 # ============================================================
-# ABA 2 - GANTT (AJUSTADO: RELÓGIO + DATAS 3H)
+# ABA 2 - GANTT (REGULA DE 3H + RELÓGIO + DATAS)
 # ============================================================
 with aba2:
     df_g = carregar_dados()
@@ -227,27 +227,39 @@ with aba4:
                 st.rerun()
 
 # ===============================
-# ABA 5 - CARGAS (CARDS RESTAURADOS)
+# ABA 5 - CARGAS E MONITORAMENTO
 # ===============================
 with aba5:
-    st.subheader(f"📈 Cargas por Máquina (Base: {CARGA_UNIDADE} unid/carga)")
+    st.subheader(f"📈 Resumo Operacional")
     df_c = carregar_dados()
     if not df_c.empty:
-        # --- BLOCO DOS CARDS ---
+        # CÁLCULOS DOS CARDS DE ALERTAS (RESTAURADOS)
+        atrasadas = df_c[(df_c["fim"] < agora) & (df_c["status"].isin(["Pendente", "Setup"]))].shape[0]
+        maqs_em_uso = df_c[(df_c["inicio"] <= agora) & (df_c["fim"] >= agora) & (df_c["status"] != "Concluído")]["maquina"].unique()
+        ociosas = [m for m in MAQUINAS if m not in maqs_em_uso]
+        
+        # CARDS DE ALERTA
+        alert1, alert2 = st.columns(2)
+        alert1.metric("🚨 OPs ATRASADAS", f"{atrasadas} itens", delta_color="inverse")
+        alert2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)} maq", delta=", ".join(ociosas) if ociosas else "Nenhuma", delta_color="off")
+        
+        st.divider()
+        
+        # CARDS DE CARGA POR MÁQUINA
+        st.write(f"**Cargas Pendentes (Base: {CARGA_UNIDADE} unid/carga)**")
         df_prod_c = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
         cols = st.columns(4)
         for i, maq in enumerate(MAQUINAS):
             total_qtd = df_prod_c[df_prod_c["maquina"] == maq]["qtd"].sum()
             cols[i].metric(label=f"🏭 {maq.upper()}", value=f"{total_qtd / CARGA_UNIDADE:.1f} cargas", delta=f"{int(total_qtd)} unid")
         
-        # --- DETALHAMENTO ---
-        with st.expander("📋 Detalhamento por OP", expanded=True):
+        with st.expander("📋 Detalhamento por OP"):
             for maq in MAQUINAS:
                 st.write(f"**{maq}**")
                 df_maq = df_prod_c[df_prod_c["maquina"] == maq]
                 if not df_maq.empty:
                     for _, row in df_maq.iterrows(): st.write(f"  • {row['pedido']}: {int(row['qtd'])} unid")
-                else: st.write("  • Nenhuma OP")
+                else: st.write("  • Nenhuma OP pendente")
 
 st.divider()
 st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')}")

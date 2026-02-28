@@ -4,17 +4,21 @@ import plotly.express as px
 import sqlite3
 from datetime import datetime, timedelta
 import pytz
-import time
 import io
+from streamlit_autorefresh import st_autorefresh # Nova Importação
 
 # ===============================
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ===============================
 st.set_page_config(page_title="PCP William - Industrial", layout="wide")
 
+# ATUALIZAÇÃO AUTOMÁTICA: Roda a cada 5 segundos (5000ms)
+# O key="pcp_refresh" evita conflitos com outros componentes
+st_autorefresh(interval=5000, key="pcp_refresh")
+
 # Lista de e-mails autorizados
 EMAILS_AUTORIZADOS = [
-    "will@admin.com.br", 
+    "william@seuemail.com", 
     "admin@empresa.com",
     "producao@empresa.com"
 ]
@@ -87,14 +91,15 @@ st.title("🏭 Gestão de Produção Industrial")
 
 with st.sidebar:
     st.title("👤 Usuário Ativo")
-    st.write(f"Hora Local: **{agora.strftime('%H:%M:%S')}**") # Relógio na barra lateral também
+    st.write(f"Hora Local: **{agora.strftime('%H:%M:%S')}**")
+    st.info("Atualização: Automática (5s)")
     if st.button("Sair do Sistema"):
         st.session_state.auth_ok = False
         st.rerun()
 
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Novo Pedido", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo"])
 
-# --- ABA 2: GANTT (COM RELÓGIO NA LINHA VERMELHA) ---
+# --- ABA 2: GANTT (ATUALIZAÇÃO 5s) ---
 with aba2:
     st.subheader("Cronograma de Máquinas")
     df_g = carregar_dados()
@@ -114,38 +119,28 @@ with aba2:
         fig.update_traces(visible=False)
 
     fig.update_yaxes(autorange="reversed", title="Máquinas")
-    
-    # LINHA VERMELHA E RELÓGIO (CONTADOR)
     fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
     
-    # Adicionando o relógio (texto) que segue a linha
+    # Marcador de tempo real na linha vermelha
     fig.add_annotation(
-        x=agora,
-        y=1.05, # Posição acima do gráfico
-        yref="paper",
-        text=f"⏱️ AGORA: {agora.strftime('%H:%M')}",
-        showarrow=False,
-        font=dict(color="white", size=14),
-        bgcolor="red",
-        bordercolor="red",
-        borderwidth=2,
-        borderpad=4,
-        align="center"
+        x=agora, y=1.05, yref="paper",
+        text=f"⏱️ AGORA: {agora.strftime('%H:%M:%S')}",
+        showarrow=False, font=dict(color="white", size=14),
+        bgcolor="red", borderpad=4
     )
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # Avisos de Máquina
-    st.markdown("---")
+    # Status das Máquinas
     maquinas_com_dados = df_g["maquina"].unique() if not df_g.empty else []
     cols_avisos = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         if m not in maquinas_com_dados:
-            cols_avisos[i].warning(f"⚠️ {m.upper()}\n\nSem programação.")
+            cols_avisos[i].warning(f"⚠️ {m.upper()}\n\nSem carga.")
         else:
-            cols_avisos[i].success(f"✅ {m.upper()}\n\nEm operação.")
+            cols_avisos[i].success(f"✅ {m.upper()}\n\nAtiva.")
 
-# --- ABAS 1, 3 e 4 (Mantidas conforme o padrão estável anterior) ---
+# --- OUTRAS ABAS (MANTIDAS) ---
 with aba1:
     st.subheader("Programar Máquina")
     df_p = carregar_produtos()

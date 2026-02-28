@@ -20,6 +20,9 @@ CARGA_UNIDADE = 49504
 fuso_br = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(fuso_br).replace(tzinfo=None)
 
+# URL da sua planilha publicada
+GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
+
 if "auth_ok" not in st.session_state: st.session_state.auth_ok = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
 
@@ -39,13 +42,67 @@ with conectar() as conn:
             vinculo_id INTEGER
         )
     """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS produtos (
-            codigo TEXT PRIMARY KEY, 
-            descricao TEXT, 
-            cliente TEXT
+
+# ===============================
+# FUNÇÃO PARA CARREGAR PRODUTOS DO GOOGLE SHEETS
+# ===============================
+@st.cache_data(ttl=300)  # Cache de 5 minutos
+def carregar_produtos_google():
+    """Carrega os produtos diretamente do Google Sheets"""
+    try:
+        # Baixar CSV da planilha publicada
+        df = pd.read_csv(GOOGLE_SHEETS_URL, sep=',', encoding='utf-8')
+        
+        # Limpar nomes das colunas (remover espaços e caracteres especiais)
+        df.columns = df.columns.str.strip()
+        
+        # Mapeamento das colunas baseado no seu cabeçalho
+        # Prioridade: CÓDIGO > ID_ITEM
+        if 'CÓDIGO' in df.columns and df['CÓDIGO'].notna().any():
+            df['codigo'] = df['CÓDIGO'].astype(str).str.strip()
+        else:
+            df['codigo'] = df['ID_ITEM'].astype(str).str.strip()
+        
+        # Descrição
+        df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip()
+        
+        # Cliente
+        if 'CLIENTE' in df.columns:
+            df['cliente'] = df['CLIENTE'].astype(str).str.strip()
+        else:
+            df['cliente'] = ''
+        
+        # Quantidade por carga
+        if 'QTD/CARGA' in df.columns:
+            # Converter para número, tratando vírgulas e pontos
+            df['qtd_carga'] = pd.to_numeric(
+                df['QTD/CARGA'].astype(str).str.replace(',', '.'), 
+                errors='coerce'
+            ).fillna(CARGA_UNIDADE)
+        else:
+            df['qtd_carga'] = CARGA_UNIDADE
+        
+        # Máquina (se disponível)
+        if 'MQ' in df.columns:
+            df['maquina'] = df['MQ'].astype(str).str.strip()
+        else:
+            df['maquina'] = ''
+        
+        # Preencher valores nulos
+        df = df.fillna('')
+        
+        # Criar campo 'descricao_completa' para exibição nos selects
+        df['descricao_completa'] = df.apply(
+            lambda row: f"{row['codigo']} - {row['descricao']} ({row['cliente']})", 
+            axis=1
         )
-    """)
+        
+        return df
+        
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar planilha: {e}")
+        # Retorna DataFrame vazio com as colunas necessárias
+        return pd.DataFrame(columns=['codigo', 'descricao', 'cliente', 'descricao_completa', 'qtd_carga'])
 
 def carregar_dados():
     with conectar() as c:
@@ -90,10 +147,10 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
+aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📋 Produtos (Google)", "📈 Cargas"])
 
 # ============================================================
-# ABA 2 - GANTT + CARDS DE ACOMPANHAMENTO (POSIÇÃO CORRIGIDA)
+# ABA 2 - GANTT + CARDS DE ACOMPANHAMENTO
 # ============================================================
 with aba2:
     df_g = carregar_dados()
@@ -134,7 +191,7 @@ with aba2:
         fig.update_layout(height=500, margin=dict(l=10, r=10, t=100, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- CARDS DE ACOMPANHAMENTO NA PARTE DE BAIXO DA ABA 2 ---
+        # --- CARDS DE ACOMPANHAMENTO ---
         st.markdown("---")
         atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
         maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
@@ -151,65 +208,103 @@ with aba2:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP
+# ABA 1 - LANÇAR OP (COM GOOGLE SHEETS)
 # ===============================
 with aba1:
     with st.container(border=True):
         st.subheader("➕ Lançar Nova Ordem de Produção")
-        df_p = pd.read_sql_query("SELECT * FROM produtos", conectar())
+        
+        # Carregar produtos do Google Sheets
+        with st.spinner("Carregando produtos da planilha..."):
+            df_produtos = carregar_produtos_google()
+        
         col1, col2 = st.columns(2)
         with col1:
             maquina_sel = st.selectbox("🏭 Máquina", MAQUINAS, key="maq_lanc")
-            if not df_p.empty:
-                opcoes_prod = [f"{row['codigo']} - {row['descricao']}" for _, row in df_p.iterrows()]
-                produto_sel = st.selectbox("📦 Produto", opcoes_prod, key="prod_lanc")
-                codigo_prod = produto_sel.split(" - ")[0]
-                cliente_auto = df_p[df_p['codigo'] == codigo_prod]['cliente'].values[0]
+            
+            if not df_produtos.empty:
+                # Lista de produtos para selectbox
+                opcoes_prod = df_produtos['descricao_completa'].tolist()
+                produto_sel = st.selectbox("📦 Produto (da planilha Google)", opcoes_prod, key="prod_lanc")
+                
+                # Extrair código do produto selecionado
+                codigo_prod = produto_sel.split(" - ")[0] if " - " in produto_sel else produto_sel
+                
+                # Buscar informações completas do produto
+                produto_info = df_produtos[df_produtos['codigo'] == codigo_prod]
+                if not produto_info.empty:
+                    info = produto_info.iloc[0]
+                    cliente_auto = info.get('cliente', '')
+                    qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
+                    
+                    # Garantir que seja número
+                    try:
+                        qtd_carga_sugerida = float(qtd_carga_sugerida) if qtd_carga_sugerida else CARGA_UNIDADE
+                    except:
+                        qtd_carga_sugerida = CARGA_UNIDADE
+                else:
+                    cliente_auto = ""
+                    qtd_carga_sugerida = CARGA_UNIDADE
             else:
-                st.warning("⚠️ Cadastre produtos na aba Catálogo"); produto_sel = None; cliente_auto = ""
+                st.error("❌ Não foi possível carregar produtos da planilha. Verifique a URL.")
+                produto_sel = None
+                cliente_auto = ""
+                qtd_carga_sugerida = CARGA_UNIDADE
+        
         with col2:
             op_num = st.text_input("🔢 Número da OP", key="op_lanc")
             cliente_in = st.text_input("👥 Cliente", value=cliente_auto, key="cli_lanc")
+        
         col3, col4, col5 = st.columns(3)
-        qtd = col3.number_input("📊 Quantidade", min_value=1, value=int(CARGA_UNIDADE), key="qtd_lanc")
+        qtd = col3.number_input("📊 Quantidade", min_value=1, value=int(qtd_carga_sugerida), key="qtd_lanc")
         setup_min = col4.number_input("⏱️ Setup (min)", min_value=0, value=30, key="setup_lanc")
         sugestao = proximo_horario(maquina_sel)
         data_inicio = col5.date_input("📅 Data Início", sugestao.date(), key="data_lanc")
         hora_inicio = col5.time_input("⏰ Hora Início", sugestao.time(), key="hora_lanc")
+        
         if st.button("🚀 LANÇAR PRODUÇÃO", type="primary", use_container_width=True):
             if op_num and produto_sel:
                 inicio = datetime.combine(data_inicio, hora_inicio)
                 fim_prod = inicio + timedelta(hours=qtd/CADENCIA_PADRAO)
                 with conectar() as conn:
                     cur = conn.cursor()
-                    cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                                (maquina_sel, f"{cliente_in} | OP:{op_num}", codigo_prod, inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd))
+                    cur.execute("""
+                        INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) 
+                        VALUES (?,?,?,?,?,?,?)
+                    """, (maquina_sel, f"{cliente_in} | OP:{op_num}", codigo_prod, 
+                          inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), 
+                          "Pendente", qtd))
                     producao_id = cur.lastrowid
                     if setup_min > 0:
                         fim_setup = fim_prod + timedelta(minutes=setup_min)
-                        conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
-                                    (maquina_sel, f"SETUP OP:{op_num}", "Ajuste/Troca", fim_prod.strftime('%Y-%m-%d %H:%M:%S'), fim_setup.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, producao_id))
-                st.success(f"✅ OP {op_num} lançada!"); st.rerun()
+                        conn.execute("""
+                            INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) 
+                            VALUES (?,?,?,?,?,?,?,?)
+                        """, (maquina_sel, f"SETUP OP:{op_num}", "Ajuste/Troca", 
+                              fim_prod.strftime('%Y-%m-%d %H:%M:%S'), fim_setup.strftime('%Y-%m-%d %H:%M:%S'), 
+                              "Setup", 0, producao_id))
+                st.success(f"✅ OP {op_num} lançada!"); 
+                st.rerun()
+            else:
+                if not op_num:
+                    st.error("❌ Digite o número da OP!")
+                elif not produto_sel:
+                    st.error("❌ Selecione um produto!")
 
 # ===============================
 # ABA 3 - GERENCIAR
-# ===============================
-# ===============================
-# ABA 3 - GERENCIAR (CORRIGIDA)
 # ===============================
 with aba3:
     st.subheader("⚙️ Gerenciar Ordens de Produção")
     df_ger = carregar_dados()
     
     if not df_ger.empty:
-        # Mostra apenas produções pendentes (não concluídas)
         producoes = df_ger[df_ger["status"] == "Pendente"].sort_values("inicio")
         
         if producoes.empty:
             st.info("✅ Nenhuma produção pendente no momento.")
         else:
             for _, prod in producoes.iterrows():
-                # Busca o setup vinculado a esta produção
                 setup = df_ger[(df_ger["vinculo_id"] == prod["id"]) & (df_ger["status"] == "Setup")]
                 
                 with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
@@ -222,20 +317,17 @@ with aba3:
                             s = setup.iloc[0]
                             st.write(f"🔧 **Setup:** {s['inicio'].strftime('%H:%M')} às {s['fim'].strftime('%H:%M')}")
                     
-                    # Botão CONCLUIR com tratamento de erro
                     if col_b.button("✅ Concluir", key=f"conc_{prod['id']}"):
                         try:
                             with conectar() as conn:
-                                # Conclui a produção e seu setup (se houver)
                                 conn.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", 
                                            (prod['id'], prod['id']))
-                                conn.commit()  # Garante que a alteração seja salva
-                            st.success(f"OP {prod['pedido']} concluída com sucesso!")
+                                conn.commit()
+                            st.success(f"OP {prod['pedido']} concluída!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao concluir: {e}")
+                            st.error(f"Erro: {e}")
                     
-                    # Botão APAGAR com tratamento de erro
                     if col_c.button("🗑️ Apagar", key=f"del_{prod['id']}"):
                         try:
                             with conectar() as conn:
@@ -245,35 +337,59 @@ with aba3:
                             st.success(f"OP {prod['pedido']} apagada.")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao apagar: {e}")
+                            st.error(f"Erro: {e}")
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 4 - CATÁLOGO
+# ABA 4 - PRODUTOS (VISUALIZAÇÃO DA PLANILHA)
 # ===============================
 with aba4:
-    st.subheader("📦 Catálogo de Produtos")
-    with st.expander("➕ Cadastrar Novo Produto", expanded=True):
-        col_c1, col_c2, col_c3 = st.columns(3)
-        novo_cod = col_c1.text_input("Código do Produto", key="novo_cod")
-        nova_desc = col_c2.text_input("Descrição", key="nova_desc")
-        novo_cli = col_c3.text_input("Cliente", key="novo_cli")
-        if st.button("✅ Cadastrar Produto", key="btn_cad_prod"):
-            if novo_cod and nova_desc:
-                with conectar() as conn:
-                    try:
-                        conn.execute("INSERT INTO produtos (codigo, descricao, cliente) VALUES (?, ?, ?)", (novo_cod, nova_desc, novo_cli))
-                        st.success(f"✅ Produto {novo_cod} cadastrado!"); st.rerun()
-                    except sqlite3.IntegrityError: st.error("❌ Código já existe!")
-    df_prod = pd.read_sql_query("SELECT * FROM produtos ORDER BY codigo", conectar())
+    st.subheader("📋 Produtos - Fonte: Google Sheets")
+    
+    with st.spinner("Carregando dados da planilha..."):
+        df_prod = carregar_produtos_google()
+    
     if not df_prod.empty:
-        st.dataframe(df_prod, use_container_width=True)
-        with st.expander("🗑️ Excluir Produto"):
-            prod_del = st.selectbox("Selecionar produto", df_prod['codigo'].tolist())
-            if st.button("Excluir", type="secondary"):
-                with conectar() as c: c.execute("DELETE FROM produtos WHERE codigo=?", (prod_del,))
-                st.rerun()
+        # Métricas rápidas
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("Total de Produtos", len(df_prod))
+        col_m2.metric("Clientes", df_prod['cliente'].nunique() if 'cliente' in df_prod.columns else 0)
+        col_m3.metric("Carga média", f"{df_prod['qtd_carga'].mean():.0f}")
+        
+        st.markdown("---")
+        
+        # Filtros
+        with st.expander("🔍 Filtrar produtos", expanded=False):
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                if 'cliente' in df_prod.columns:
+                    clientes = ['Todos'] + sorted(df_prod['cliente'].unique().tolist())
+                    filtro_cliente = st.selectbox("Filtrar por Cliente", clientes)
+                else:
+                    filtro_cliente = 'Todos'
+            
+            with col_f2:
+                busca = st.text_input("Buscar por código ou descrição")
+            
+            # Aplicar filtros
+            df_filtrado = df_prod.copy()
+            if filtro_cliente != 'Todos' and 'cliente' in df_filtrado.columns:
+                df_filtrado = df_filtrado[df_filtrado['cliente'] == filtro_cliente]
+            
+            if busca:
+                df_filtrado = df_filtrado[
+                    df_filtrado['codigo'].astype(str).str.contains(busca, case=False, na=False) |
+                    df_filtrado['descricao'].astype(str).str.contains(busca, case=False, na=False)
+                ]
+        
+        # Mostrar dados
+        st.dataframe(df_filtrado, use_container_width=True)
+        
+        # Informação de atualização
+        st.caption(f"📅 Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} (cache de 5 minutos)")
+    else:
+        st.error("❌ Não foi possível carregar os dados da planilha.")
 
 # ===============================
 # ABA 5 - CARGAS
@@ -292,8 +408,14 @@ with aba5:
                 st.write(f"**{maq}**")
                 df_maq = df_prod_c[df_prod_c["maquina"] == maq]
                 if not df_maq.empty:
-                    for _, row in df_maq.iterrows(): st.write(f"  • {row['pedido']}: {int(row['qtd'])} unid")
-                else: st.write("  • Nenhuma OP")
+                    for _, row in df_maq.iterrows(): 
+                        st.write(f"  • {row['pedido']}: {int(row['qtd'])} unid")
+                else: 
+                    st.write("  • Nenhuma OP")
 
 st.divider()
-st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
+col_r1, col_r2, col_r3 = st.columns(3)
+with col_r1:
+    st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
+with col_r3:
+    st.caption("🏭 PCP Industrial v3.0 - Google Sheets")

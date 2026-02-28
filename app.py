@@ -5,22 +5,20 @@ import sqlite3
 from datetime import datetime, timedelta
 import pytz
 import io
-from streamlit_autorefresh import st_autorefresh # Nova Importação
+from streamlit_autorefresh import st_autorefresh
 
 # ===============================
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ===============================
 st.set_page_config(page_title="PCP William - Industrial", layout="wide")
 
-# ATUALIZAÇÃO AUTOMÁTICA: Roda a cada 5 segundos (5000ms)
-# O key="pcp_refresh" evita conflitos com outros componentes
-st_autorefresh(interval=5000, key="pcp_refresh")
+# ATUALIZAÇÃO AUTOMÁTICA: Ajustada para 30 segundos (30000ms)
+st_autorefresh(interval=30000, key="pcp_refresh")
 
-# Lista de e-mails autorizados
+# Lista de e-mails autorizados atualizada
 EMAILS_AUTORIZADOS = [
     "will@admin.com.br", 
-    "admin@empresa.com",
-    "producao@empresa.com"
+    "william@seuemail.com"
 ]
 
 # ===============================
@@ -92,14 +90,14 @@ st.title("🏭 Gestão de Produção Industrial")
 with st.sidebar:
     st.title("👤 Usuário Ativo")
     st.write(f"Hora Local: **{agora.strftime('%H:%M:%S')}**")
-    st.info("Atualização: Automática (5s)")
+    st.info("Atualização: Automática (30s)")
     if st.button("Sair do Sistema"):
         st.session_state.auth_ok = False
         st.rerun()
 
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Novo Pedido", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo"])
 
-# --- ABA 2: GANTT (ATUALIZAÇÃO 5s) ---
+# --- ABA 2: GANTT ---
 with aba2:
     st.subheader("Cronograma de Máquinas")
     df_g = carregar_dados()
@@ -121,10 +119,9 @@ with aba2:
     fig.update_yaxes(autorange="reversed", title="Máquinas")
     fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
     
-    # Marcador de tempo real na linha vermelha
     fig.add_annotation(
         x=agora, y=1.05, yref="paper",
-        text=f"⏱️ AGORA: {agora.strftime('%H:%M:%S')}",
+        text=f"⏱️ AGORA: {agora.strftime('%H:%M')}",
         showarrow=False, font=dict(color="white", size=14),
         bgcolor="red", borderpad=4
     )
@@ -166,27 +163,4 @@ with aba1:
                 with conectar() as conn:
                     conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status) VALUES (?,?,?,?,?,?)",
                                 (maq_s, f"{cli_n} | {ped_n}", item_a, ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente"))
-                st.success("Salvo!"); st.rerun()
-
-with aba3:
-    df_ger = carregar_dados()
-    if not df_ger.empty:
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine='xlsxwriter') as writer: df_ger.to_excel(writer, index=False)
-        st.download_button("📥 Exportar Excel", buf.getvalue(), "PCP.xlsx")
-        for _, r in df_ger.sort_values("inicio", ascending=False).iterrows():
-            with st.expander(f"{r['maquina']} - {r['pedido']}"):
-                if st.button("Excluir", key=f"d{r['id']}"):
-                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=?", (r['id'],))
-                    st.rerun()
-                if r['status'] == 'Pendente' and st.button("Concluir", key=f"c{r['id']}"):
-                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
-                    st.rerun()
-
-with aba4:
-    with st.form("f_prod"):
-        c1, c2, c3 = st.columns(3); cod = c1.text_input("Código"); des = c2.text_input("Descrição"); cli = c3.text_input("Cliente")
-        if st.form_submit_button("Salvar"):
-            with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (cod, des, cli))
-            st.rerun()
-    st.dataframe(carregar_produtos(), use_container_width=True)
+                st.success("Salvo!"); st.rerun

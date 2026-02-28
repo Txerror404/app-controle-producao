@@ -37,6 +37,7 @@ def carregar_dados():
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["h_ini"] = df["inicio"].dt.strftime('%H:%M')
         df["h_fim"] = df["fim"].dt.strftime('%H:%M')
+        # Rótulo atualizado para usar termo "OP" no gráfico
         df["rotulo_barra"] = df.apply(lambda r: "SET.UP" if r['status'] == "Setup" else f"{r['pedido']}<br>QUANT: {int(r['qtd'])}", axis=1)
     return df
 
@@ -47,7 +48,6 @@ def proximo_horario(maq):
         if not df_maq.empty: return max(agora, df_maq["fim"].max())
     return agora
 
-# --- LOGIN ---
 if not st.session_state.auth_ok:
     st.markdown("<h1 style='text-align:center;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
@@ -60,16 +60,14 @@ if not st.session_state.auth_ok:
 is_admin = st.session_state.user_email == ADMIN_EMAIL
 
 # ===============================
-# 2. CABEÇALHO PROFISSIONAL (O ESPAÇO MARCADO)
+# 2. TÍTULO PROFISSIONAL (ESPAÇO MARCADO)
 # ===============================
 st.markdown("""
-    <div style="background-color: #1E1E1E; padding: 20px; border-radius: 10px; border-left: 10px solid #FF4B4B; margin-bottom: 20px;">
-        <h1 style="color: white; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 28px;">
-            📊 CONTROLE DINÂMICO DE PRODUÇÃO <span style="color: #FF4B4B;">|</span> PCP INDUSTRIAL
+    <div style="background-color: #0E1117; padding: 10px; border-radius: 5px; border-bottom: 2px solid #FF4B4B; margin-bottom: 25px;">
+        <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif;">
+            🔧 CRONOGRAMA DINÂMICO DE MÁQUINAS <span style="color: #FF4B4B;">|</span> PCP
         </h1>
-        <p style="color: #AAAAAA; margin: 5px 0 0 0; font-size: 14px;">Monitoramento em Tempo Real - Cronograma de Máquinas</p>
     </div>
-    <hr style="margin-top: 0; margin-bottom: 20px; border: 0.5px solid #333;">
     """, unsafe_allow_html=True)
 
 # ===============================
@@ -77,7 +75,41 @@ st.markdown("""
 # ===============================
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançamentos", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
-# ABA 2: GANTT (O CORAÇÃO DO SISTEMA)
+with aba1:
+    col_a, col_b = st.columns(2)
+    with col_a:
+        with st.container(border=True):
+            st.subheader("Programar Produção")
+            df_p = pd.read_sql_query("SELECT * FROM produtos", conectar())
+            with st.form("f_new_ped"):
+                maq_s = st.selectbox("Máquina", MAQUINAS)
+                p_lista = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
+                p_sel = st.selectbox("Produto", [""] + p_lista)
+                
+                # MUDANÇA: Nº Pedido -> Nº OP
+                op_n = st.text_input("Nº OP") 
+                
+                cli_sug = df_p[df_p['codigo'] == p_sel.split(" | ")[0]]['cliente'].values[0] if p_sel else ""
+                cli_n = st.text_input("Cliente", value=cli_sug)
+                qtd_n = st.number_input("Quantidade", value=CARGA_UNIDADE)
+                set_n = st.number_input("Setup Automático (min)", value=30)
+                sug = proximo_horario(maq_s); c1, c2 = st.columns(2)
+                dat_n = c1.date_input("Data Início", sug.date()); hor_n = c2.time_input("Hora Início", sug.time())
+                
+                if st.form_submit_button("Lançar OP", use_container_width=True):
+                    if op_n and p_sel:
+                        ini = datetime.combine(dat_n, hor_n); fim = ini + timedelta(hours=qtd_n/CADENCIA_PADRAO)
+                        with conectar() as conn:
+                            cur = conn.cursor()
+                            # Salvamos no banco mantendo a estrutura, mas o rótulo visual será OP
+                            cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", 
+                                        (maq_s, f"{cli_n} | {op_n}", p_sel.split(" | ")[0], ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
+                            p_id = cur.lastrowid
+                            if set_n > 0:
+                                f_s = fim + timedelta(minutes=set_n)
+                                conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, p_id))
+                        st.rerun()
+
 with aba2:
     df_g = carregar_dados()
     if not df_g.empty:
@@ -87,25 +119,21 @@ with aba2:
         fig = px.timeline(
             df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="rotulo_barra",
             category_orders={"maquina": MAQUINAS},
-            custom_data=["pedido", "h_ini", "h_fim", "item", "qtd"],
+            custom_data=["pedido", "h_ini", "h_fim", "qtd"],
             color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         
-        # ESCALA DE 2 DIAS
         fig.update_xaxes(
             type='date',
             range=[agora - timedelta(hours=2), agora + timedelta(hours=46)],
-            dtick=10800000, # 3 horas
+            dtick=10800000, 
             showgrid=True, gridcolor='rgba(255,255,255,0.05)',
             tickformat="%d/%m\n%H:%M"
         )
         
         fig.update_yaxes(autorange="reversed", title="")
-        
-        # LINHA AGORA
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
         
-        # RELÓGIO AGORA (POSIÇÃO ALTA E LIMPA)
         fig.add_annotation(
             x=agora, y=1.1, 
             text=f"AGORA: {agora.strftime('%H:%M')}", 
@@ -117,7 +145,7 @@ with aba2:
             textposition='inside', 
             insidetextanchor='start',
             width=0.85, 
-            hovertemplate="<b>Pedido: %{customdata[0]}</b><br>Qtd: %{customdata[4]}<extra></extra>"
+            hovertemplate="<b>OP: %{customdata[0]}</b><br>Qtd: %{customdata[3]}<extra></extra>"
         )
         
         fig.update_layout(
@@ -128,36 +156,7 @@ with aba2:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-# --- RESTANTE DAS ABAS (CÓDIGO INTEGRAL) ---
-with aba1:
-    col_a, col_b = st.columns(2)
-    with col_a:
-        with st.container(border=True):
-            st.subheader("Programar Produção")
-            df_p = pd.read_sql_query("SELECT * FROM produtos", conectar())
-            with st.form("f_new_ped"):
-                maq_s = st.selectbox("Máquina", MAQUINAS)
-                p_lista = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
-                p_sel = st.selectbox("Produto", [""] + p_lista)
-                ped_n = st.text_input("Nº Pedido")
-                cli_sug = df_p[df_p['codigo'] == p_sel.split(" | ")[0]]['cliente'].values[0] if p_sel else ""
-                cli_n = st.text_input("Cliente", value=cli_sug)
-                qtd_n = st.number_input("Quantidade", value=CARGA_UNIDADE)
-                set_n = st.number_input("Setup Automático (min)", value=30)
-                sug = proximo_horario(maq_s); c1, c2 = st.columns(2)
-                dat_n = c1.date_input("Data Início", sug.date()); hor_n = c2.time_input("Hora Início", sug.time())
-                if st.form_submit_button("Lançar Ordem", use_container_width=True):
-                    if ped_n and p_sel:
-                        ini = datetime.combine(dat_n, hor_n); fim = ini + timedelta(hours=qtd_n/CADENCIA_PADRAO)
-                        with conectar() as conn:
-                            cur = conn.cursor()
-                            cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maq_s, f"{cli_n} | {ped_n}", p_sel.split(" | ")[0], ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
-                            p_id = cur.lastrowid
-                            if set_n > 0:
-                                f_s = fim + timedelta(minutes=set_n)
-                                conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, p_id))
-                        st.rerun()
-
+# Abas 3, 4 e 5 seguem a mesma lógica estável...
 with aba3:
     df_ger = carregar_dados()
     if not df_ger.empty:

@@ -92,6 +92,9 @@ st.markdown(f"""
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
+# ============================================================
+# ABA 2 - GANTT (ÚNICA PARTE MODIFICADA: RELÓGIO + DATAS 3H)
+# ============================================================
 with aba2:
     df_g = carregar_dados()
     if not df_g.empty:
@@ -109,22 +112,33 @@ with aba2:
             type='date',
             range=[agora - timedelta(hours=2), agora + timedelta(hours=48)],
             dtick=10800000, 
-            tickformatstops=[
-                dict(dtickrange=[32400000, None], value="%d/%m\n%H:%M"),
-                dict(dtickrange=[None, 32399999], value="%H:%M")
-            ],
+            tickformat="%d/%m\n%H:%M",
             gridcolor='rgba(255,255,255,0.1)',
-            showgrid=True
+            showgrid=True,
+            tickangle=0,
+            tickfont=dict(size=10)
         )
         
         fig.update_yaxes(autorange="reversed", title="")
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
+        
+        fig.add_annotation(
+            x=agora, y=1.15, 
+            text=f"AGORA: {agora.strftime('%H:%M')}", 
+            showarrow=False, yref="paper", 
+            font=dict(color="red", size=18, family="Arial Black"),
+            align="center"
+        )
+        
         fig.update_traces(textposition='inside', insidetextanchor='start', width=0.85)
-        fig.update_layout(height=550, margin=dict(l=10, r=10, t=90, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+        fig.update_layout(height=600, margin=dict(l=10, r=10, t=100, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
+# ===============================
+# ABA 1 - LANÇAR OP (CONGELADA)
+# ===============================
 with aba1:
     with st.container(border=True):
         st.subheader("➕ Lançar Nova Ordem de Produção")
@@ -163,6 +177,9 @@ with aba1:
                                     (maquina_sel, f"SETUP OP:{op_num}", "Ajuste/Troca", fim_prod.strftime('%Y-%m-%d %H:%M:%S'), fim_setup.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, producao_id))
                 st.success(f"✅ OP {op_num} lançada!"); st.rerun()
 
+# ===============================
+# ABA 3 - GERENCIAR (CONGELADA)
+# ===============================
 with aba3:
     st.subheader("⚙️ Gerenciar Ordens de Produção")
     df_ger = carregar_dados()
@@ -183,6 +200,9 @@ with aba3:
                 if col_c.button("🗑️ Apagar", key=f"del_{prod['id']}"):
                     with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); st.rerun()
 
+# ===============================
+# ABA 4 - CATÁLOGO (CONGELADA)
+# ===============================
 with aba4:
     st.subheader("📦 Catálogo de Produtos")
     with st.expander("➕ Cadastrar Novo Produto", expanded=True):
@@ -206,6 +226,9 @@ with aba4:
                 with conectar() as c: c.execute("DELETE FROM produtos WHERE codigo=?", (prod_del,))
                 st.rerun()
 
+# ===============================
+# ABA 5 - CARGAS (CONGELADA)
+# ===============================
 with aba5:
     st.subheader(f"📈 Cargas por Máquina (Base: {CARGA_UNIDADE} unid/carga)")
     df_c = carregar_dados()
@@ -224,4 +247,4 @@ with aba5:
                 else: st.write("  • Nenhuma OP")
 
 st.divider()
-st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')} | PCP Industrial v2.0")
+st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')}")

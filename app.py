@@ -53,25 +53,22 @@ def carregar_produtos_google():
         # Baixar CSV da planilha publicada
         df = pd.read_csv(GOOGLE_SHEETS_URL, sep=',', encoding='utf-8')
         
-        # Limpar nomes das colunas (remover espaços extras, mas manter underline)
+        # Limpar nomes das colunas
         df.columns = df.columns.str.strip()
-        
-        # Debug: mostrar colunas encontradas (opcional, pode remover depois)
-        # st.write("Colunas encontradas:", df.columns.tolist())
         
         # Garantir que ID_ITEM existe
         if 'ID_ITEM' not in df.columns:
             st.error("❌ Coluna 'ID_ITEM' não encontrada na planilha!")
-            return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'descricao_completa', 'qtd_carga'])
+            return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
         
-        # Usar ID_ITEM como identificador principal
+        # ID_ITEM como identificador principal
         df['id_item'] = df['ID_ITEM'].astype(str).str.strip()
         
-        # Descrição - usando DESCRIÇÃO_1 (com underline)
+        # Descrição - usando DESCRIÇÃO_1
         if 'DESCRIÇÃO_1' in df.columns:
             df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip()
         else:
-            # Tentar variações do nome
+            # Fallback para qualquer coluna de descrição
             desc_col = None
             for col in df.columns:
                 if 'DESCRIÇÃO' in col.upper() or 'DESCRICAO' in col.upper():
@@ -82,7 +79,7 @@ def carregar_produtos_google():
             else:
                 df['descricao'] = ''
         
-        # Cliente - se não existir ou estiver vazio, preencher com "N/A"
+        # Cliente
         if 'CLIENTE' in df.columns:
             df['cliente'] = df['CLIENTE'].astype(str).str.strip()
             df['cliente'] = df['cliente'].apply(lambda x: x if x and x != 'nan' and x != '' else 'N/A')
@@ -91,7 +88,6 @@ def carregar_produtos_google():
         
         # Quantidade por carga
         if 'QTD/CARGA' in df.columns:
-            # Converter para número, tratando vírgulas e pontos
             df['qtd_carga'] = pd.to_numeric(
                 df['QTD/CARGA'].astype(str).str.replace(',', '.'), 
                 errors='coerce'
@@ -99,27 +95,14 @@ def carregar_produtos_google():
         else:
             df['qtd_carga'] = CARGA_UNIDADE
         
-        # Máquina (se disponível)
-        if 'MQ' in df.columns:
-            df['maquina'] = df['MQ'].astype(str).str.strip()
-        else:
-            df['maquina'] = ''
-        
         # Preencher valores nulos
         df = df.fillna('N/A')
-        
-        # Criar campo 'descricao_completa' para exibição nos selects
-        df['descricao_completa'] = df.apply(
-            lambda row: f"{row['id_item']} - {row['descricao']}", 
-            axis=1
-        )
         
         return df
         
     except Exception as e:
         st.error(f"❌ Erro ao carregar planilha: {e}")
-        # Retorna DataFrame vazio com as colunas necessárias
-        return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'descricao_completa', 'qtd_carga'])
+        return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
 
 def carregar_dados():
     with conectar() as c:
@@ -225,7 +208,7 @@ with aba2:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP (COM DESCRIÇÃO_1 CORRIGIDA)
+# ABA 1 - LANÇAR OP (CORRIGIDA)
 # ===============================
 with aba1:
     with st.container(border=True):
@@ -240,39 +223,49 @@ with aba1:
             maquina_sel = st.selectbox("🏭 Máquina", MAQUINAS, key="maq_lanc")
             
             if not df_produtos.empty:
-                # Lista de produtos para selectbox (mostrando ID_ITEM + descrição)
-                opcoes_prod = df_produtos['descricao_completa'].tolist()
-                produto_sel = st.selectbox("📦 Produto (ID_ITEM - DESCRIÇÃO_1)", opcoes_prod, key="prod_lanc")
+                # Selectbox para ID_ITEM
+                opcoes_id_item = df_produtos['id_item'].tolist()
                 
-                # Extrair ID_ITEM do produto selecionado (parte antes do " - ")
-                id_item_sel = produto_sel.split(" - ")[0] if " - " in produto_sel else produto_sel
+                # Selectbox
+                id_item_sel = st.selectbox("📌 ID_ITEM", opcoes_id_item, key="id_item_lanc")
                 
-                # Buscar informações completas do produto pelo ID_ITEM
-                produto_info = df_produtos[df_produtos['id_item'] == id_item_sel]
-                if not produto_info.empty:
-                    info = produto_info.iloc[0]
-                    # Cliente vem da planilha ou "N/A"
-                    cliente_auto = info.get('cliente', 'N/A')
-                    qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
-                    
-                    # Garantir que seja número
-                    try:
-                        qtd_carga_sugerida = float(qtd_carga_sugerida) if qtd_carga_sugerida else CARGA_UNIDADE
-                    except:
+                # Buscar informações do produto selecionado
+                if id_item_sel:
+                    produto_info = df_produtos[df_produtos['id_item'] == id_item_sel]
+                    if not produto_info.empty:
+                        info = produto_info.iloc[0]
+                        descricao_auto = info.get('descricao', '')
+                        cliente_auto = info.get('cliente', 'N/A')
+                        qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
+                        
+                        # Garantir que seja número
+                        try:
+                            qtd_carga_sugerida = float(qtd_carga_sugerida) if qtd_carga_sugerida else CARGA_UNIDADE
+                        except:
+                            qtd_carga_sugerida = CARGA_UNIDADE
+                    else:
+                        descricao_auto = ''
+                        cliente_auto = 'N/A'
                         qtd_carga_sugerida = CARGA_UNIDADE
                 else:
-                    cliente_auto = "N/A"
+                    descricao_auto = ''
+                    cliente_auto = 'N/A'
                     qtd_carga_sugerida = CARGA_UNIDADE
             else:
-                st.error("❌ Não foi possível carregar produtos da planilha. Verifique a URL.")
-                produto_sel = None
-                id_item_sel = ""
+                st.error("❌ Não foi possível carregar produtos da planilha.")
+                id_item_sel = None
+                descricao_auto = ''
                 cliente_auto = "N/A"
                 qtd_carga_sugerida = CARGA_UNIDADE
         
         with col2:
             op_num = st.text_input("🔢 Número da OP", key="op_lanc")
-            cliente_in = st.text_input("👥 Cliente", value=cliente_auto, key="cli_lanc", disabled=True)  # Read-only
+            
+            # Campo DESCRIÇÃO (readonly)
+            descricao_in = st.text_input("📝 DESCRIÇÃO", value=descricao_auto, key="desc_lanc", disabled=True)
+            
+            # Campo Cliente (readonly)
+            cliente_in = st.text_input("👥 Cliente", value=cliente_auto, key="cli_lanc", disabled=True)
         
         col3, col4, col5 = st.columns(3)
         qtd = col3.number_input("📊 Quantidade", min_value=1, value=int(qtd_carga_sugerida), key="qtd_lanc")
@@ -282,11 +275,12 @@ with aba1:
         hora_inicio = col5.time_input("⏰ Hora Início", sugestao.time(), key="hora_lanc")
         
         if st.button("🚀 LANÇAR PRODUÇÃO", type="primary", use_container_width=True):
-            if op_num and produto_sel:
+            if op_num and id_item_sel:
                 inicio = datetime.combine(data_inicio, hora_inicio)
                 fim_prod = inicio + timedelta(hours=qtd/CADENCIA_PADRAO)
                 with conectar() as conn:
                     cur = conn.cursor()
+                    # Salvar ID_ITEM no campo 'item' da agenda
                     cur.execute("""
                         INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) 
                         VALUES (?,?,?,?,?,?,?)
@@ -302,13 +296,13 @@ with aba1:
                         """, (maquina_sel, f"SETUP OP:{op_num}", "Ajuste/Troca", 
                               fim_prod.strftime('%Y-%m-%d %H:%M:%S'), fim_setup.strftime('%Y-%m-%d %H:%M:%S'), 
                               "Setup", 0, producao_id))
-                st.success(f"✅ OP {op_num} lançada!"); 
+                st.success(f"✅ OP {op_num} lançada!")
                 st.rerun()
             else:
                 if not op_num:
                     st.error("❌ Digite o número da OP!")
-                elif not produto_sel:
-                    st.error("❌ Selecione um produto!")
+                elif not id_item_sel:
+                    st.error("❌ Selecione um ID_ITEM!")
 
 # ===============================
 # ABA 3 - GERENCIAR
@@ -437,4 +431,4 @@ col_r1, col_r2, col_r3 = st.columns(3)
 with col_r1:
     st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
 with col_r3:
-    st.caption("🏭 PCP Industrial v3.2 - DESCRIÇÃO_1 corrigida")
+    st.caption("🏭 PCP Industrial v3.4 - ID_ITEM, DESCRIÇÃO e CLIENTE")

@@ -1,7 +1,6 @@
-streamlit
+streamlit==1.32.0
 pandas
 plotly
-sqlite3
 pytz
 openpyxl
 xlsxwriter

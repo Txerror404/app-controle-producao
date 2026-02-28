@@ -9,9 +9,9 @@ from streamlit_autorefresh import st_autorefresh
 # ===============================
 # 1. CONFIGURAÇÃO E ACESSO
 # ===============================
-st.set_page_config(page_title="PCP Industrial v4.5", layout="wide")
+st.set_page_config(page_title="PCP Industrial v4.6", layout="wide")
 
-# Refresh automático a cada 2 minutos
+# Refresh automático a cada 2 minutos (Global)
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
@@ -28,17 +28,13 @@ agora = datetime.now(fuso_br).replace(tzinfo=None)
 
 GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
-# CSS PARA POSICIONAMENTO PERSONALIZADO (MARCAÇÕES DO USUÁRIO)
+# CSS PARA UI (BOTÕES E GRADES)
 st.markdown("""
     <style>
         .block-container {padding-top: 0.5rem;}
-        /* Move botões do Plotly para o topo */
-        .modebar-container { top: 0 !important; bottom: auto !important; }
-        /* Estilização das abas */
+        .modebar-container { top: 0 !important; }
         .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-        .stTabs [data-baseweb="tab"] { 
-            background-color: #1e1e1e; border-radius: 4px; padding: 4px 12px;
-        }
+        .stTabs [data-baseweb="tab"] { background-color: #1e1e1e; border-radius: 4px; padding: 4px 12px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -47,22 +43,19 @@ if "user_email" not in st.session_state: st.session_state.user_email = ""
 
 def conectar(): return sqlite3.connect("pcp.db", check_same_thread=False)
 
+# Criar tabela se não existir
 with conectar() as conn:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS agenda (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            maquina TEXT, 
-            pedido TEXT, 
-            item TEXT, 
-            inicio TEXT, 
-            fim TEXT, 
-            status TEXT, 
-            qtd REAL, 
-            vinculo_id INTEGER
+            maquina TEXT, pedido TEXT, item TEXT, 
+            inicio TEXT, fim TEXT, status TEXT, 
+            qtd REAL, vinculo_id INTEGER
         )
     """)
 
-@st.cache_data(ttl=300)
+# Cache apenas para os produtos do Google (que não mudam toda hora)
+@st.cache_data(ttl=600)
 def carregar_produtos_google():
     try:
         df = pd.read_csv(GOOGLE_SHEETS_URL, sep=',', encoding='utf-8')
@@ -74,15 +67,13 @@ def carregar_produtos_google():
         return df.fillna('N/A')
     except: return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
 
-if 'df_produtos' not in st.session_state:
-    st.session_state.df_produtos = carregar_produtos_google()
-
-df_produtos = st.session_state.df_produtos
-
+# FUNÇÃO DE CARREGAMENTO SEM CACHE PARA ATUALIZAÇÃO IMEDIATA
 def carregar_dados():
-    with conectar() as c: df = pd.read_sql_query("SELECT * FROM agenda", c)
+    with conectar() as c: 
+        df = pd.read_sql_query("SELECT * FROM agenda", c)
     if not df.empty:
-        df["inicio"] = pd.to_datetime(df["inicio"]); df["fim"] = pd.to_datetime(df["fim"])
+        df["inicio"] = pd.to_datetime(df["inicio"])
+        df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["rotulo_barra"] = df.apply(lambda r: "🔧 SETUP" if r['status'] == "Setup" else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}", axis=1)
     return df
@@ -94,6 +85,7 @@ def proximo_horario(maq):
         if not df_maq.empty: return max(agora, df_maq["fim"].max())
     return agora
 
+# LOGIN
 if not st.session_state.auth_ok:
     st.markdown("<h1 style='text-align:center;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
@@ -104,31 +96,25 @@ if not st.session_state.auth_ok:
                 st.session_state.auth_ok = True; st.session_state.user_email = email; st.rerun()
     st.stop()
 
-# ===============================
-# CABEÇALHO COMPACTO
-# ===============================
+# DADOS DOS PRODUTOS
+df_produtos = carregar_produtos_google()
+
+# CABEÇALHO
 st.markdown(f"""
     <div style="background-color: #1E1E1E; padding: 10px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h2 style="color: white; margin: 0; font-size: 20px; font-family: 'Segoe UI', sans-serif;">
-                📊 CRONOGRAMA DE MÁQUINAS <span style="color: #FF4B4B;">|</span> PCP
-            </h2>
+            <h2 style="color: white; margin: 0; font-size: 20px; font-family: 'Segoe UI', sans-serif;">📊 PCP <span style="color: #FF4B4B;">|</span> CRONOGRAMA</h2>
             <p style="color: #888; margin: 0; font-size: 12px;">👤 {st.session_state.user_email}</p>
         </div>
         <div style="text-align: right; border: 1px solid #FF4B4B; padding: 2px 12px; border-radius: 5px; background-color: #0E1117;">
-            <h3 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px;">
-                ⏰ {agora.strftime('%H:%M:%S')}
-            </h3>
-            <p style="color: #888; margin: 0; font-size: 10px;">{agora.strftime('%d/%m/%Y')}</p>
+            <h3 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px;">⏰ {agora.strftime('%H:%M:%S')}</h3>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
 
-# ===============================
-# FUNÇÃO GANTT PERSONALIZADA
-# ===============================
+# FUNÇÃO GANTT
 def plotar_gantt(lista_maquinas, height_grafico=500):
     df_all = carregar_dados()
     if not df_all.empty:
@@ -142,48 +128,13 @@ def plotar_gantt(lista_maquinas, height_grafico=500):
                 category_orders={"maquina": lista_maquinas},
                 color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
             )
-            
-            # Linhas Horizontais sólidas e Barras "Coladas"
             fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)
             fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
-
-            fig.update_xaxes(
-                type='date', range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], 
-                dtick=10800000, tickformat="%H:%M\n%d/%m", 
-                gridcolor='rgba(255,255,255,0.05)', showgrid=True, tickfont=dict(size=10, color="white")
-            )
-            
+            fig.update_xaxes(type='date', range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], dtick=10800000, tickformat="%H:%M\n%d/%m")
             fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-            
-            # Relógio "AGORA" no Rodapé
-            fig.add_annotation(
-                x=agora, y=-0.18, text=f"AGORA: {agora.strftime('%H:%M')}", 
-                showarrow=False, xref="x", yref="paper", 
-                font=dict(color="red", size=13, family="Arial Black"),
-                bgcolor="rgba(0,0,0,0.9)", bordercolor="red", borderpad=2
-            )
-            
-            fig.update_layout(
-                height=height_grafico, margin=dict(l=10, r=10, t=50, b=100),
-                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                bargap=0.01, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            
+            fig.add_annotation(x=agora, y=-0.18, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, xref="x", yref="paper", font=dict(color="red", size=13, family="Arial Black"), bgcolor="rgba(0,0,0,0.9)", bordercolor="red", borderpad=2)
+            fig.update_layout(height=height_grafico, margin=dict(l=10, r=10, t=50, b=100), bargap=0.01, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
-
-            # Indicadores
-            st.markdown("---")
-            atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
-            maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
-            ociosas = [m for m in lista_maquinas if m not in maqs_em_uso]
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("🚨 OPs ATRASADAS", f"{atrasadas}")
-            c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
-            if ociosas:
-                c3.warning(f"{len(ociosas)} máquinas livres")
-            else:
-                c3.success("✅ Setor Ocupado")
 
 with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, 450)
 with aba6: plotar_gantt(MAQUINAS_SOPRO, 1100)
@@ -202,7 +153,7 @@ with aba1:
             st.text_input("👥 Cliente", value=info.get('cliente', 'N/A'), disabled=True)
         
         c3, c4, c5 = st.columns(3)
-        qtd = c3.number_input("📊 Qtd", min_value=1, value=int(info.get('qtd_carga', CARGA_UNIDADE)) if id_item_sel else CARGA_UNIDADE)
+        qtd = c3.number_input("📊 Qtd", min_value=1, value=int(info.get('qtd_carga', CARGA_UNIDADE)) if id_item_sel else int(CARGA_UNIDADE))
         setup_min = c4.number_input("⏱️ Setup (min)", value=30)
         sugestao = proximo_horario(maquina_sel)
         data_ini = c5.date_input("📅 Data", sugestao.date()); hora_ini = c5.time_input("⏰ Hora", sugestao.time())
@@ -218,7 +169,7 @@ with aba1:
                 st.rerun()
 
 with aba3:
-    st.subheader("⚙️ Painel de Ajuste Rápido (Reprogramar)")
+    st.subheader("⚙️ Gerenciar")
     df_ger = carregar_dados()
     if not df_ger.empty:
         is_admin = st.session_state.user_email == ADMIN_EMAIL
@@ -226,26 +177,22 @@ with aba3:
             with st.expander(f"📌 {prod['maquina']} | {prod['pedido']}"):
                 col1, col2, col3 = st.columns([2, 2, 1])
                 if is_admin:
-                    n_data = col1.date_input("Nova Data", prod['inicio'].date(), key=f"d_{prod['id']}")
-                    n_hora = col2.time_input("Nova Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
-                    if st.button("💾 Salvar Alteração", key=f"s_{prod['id']}"):
+                    n_data = col1.date_input("Data", prod['inicio'].date(), key=f"d_{prod['id']}")
+                    n_hora = col2.time_input("Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
+                    if st.button("💾 Salvar", key=f"s_{prod['id']}"):
                         n_inicio = datetime.combine(n_data, n_hora)
                         n_fim = n_inicio + (prod['fim'] - prod['inicio'])
                         with conectar() as c:
-                            c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", 
-                                     (n_inicio.strftime('%Y-%m-%d %H:%M:%S'), n_fim.strftime('%Y-%m-%d %H:%M:%S'), prod['id']))
-                            c.commit()
+                            c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (n_inicio.strftime('%Y-%m-%d %H:%M:%S'), n_fim.strftime('%Y-%m-%d %H:%M:%S'), prod['id']))
                         st.rerun()
-                
-                if col3.button("✅ Concluir", key=f"ok_{prod['id']}"):
-                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (prod['id'],)); c.commit()
+                if col3.button("✅ Ok", key=f"ok_{prod['id']}"):
+                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (prod['id'],))
                     st.rerun()
-                if col3.button("🗑️ Excluir", key=f"del_{prod['id']}"):
-                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=?", (prod['id'],)); c.commit()
+                if col3.button("🗑️ Sair", key=f"del_{prod['id']}"):
+                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
                     st.rerun()
 
 with aba4: st.dataframe(df_produtos, use_container_width=True)
-
 with aba5:
     df_c = carregar_dados()
     if not df_c.empty:
@@ -254,4 +201,4 @@ with aba5:
         st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
 
 st.divider()
-st.caption(f"v4.5 | Refresh 2min | {agora.strftime('%H:%M:%S')}")
+st.caption(f"v4.6 | Refresh 2min | {agora.strftime('%H:%M:%S')}")

@@ -28,6 +28,23 @@ agora = datetime.now(fuso_br).replace(tzinfo=None)
 
 GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
+# CSS PARA MOVER BOTÕES DO PLOTLY PARA CIMA E AJUSTAR LAYOUT
+st.markdown("""
+    <style>
+        .block-container {padding-top: 0.5rem;}
+        /* Força a barra de ferramentas do Plotly para o topo */
+        .modebar-container {
+            top: 0 !important;
+            bottom: auto !important;
+        }
+        /* Estilização do Menu Lateral */
+        section[data-testid="stSidebar"] {
+            background-color: #0E1117;
+            border-right: 1px solid #FF4B4B;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 if "auth_ok" not in st.session_state: st.session_state.auth_ok = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
 
@@ -93,19 +110,14 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # ===============================
-# LAYOUT LATERAL (CONFORME SOLICITADO)
+# MENU LATERAL (ABAS NA ESQUERDA)
 # ===============================
-st.markdown("<style>.block-container {padding-top: 0.5rem;}</style>", unsafe_allow_html=True)
-
-col_sidebar, col_main = st.columns([1, 5.5])
-
-with col_sidebar:
+with st.sidebar:
     st.markdown(f"""
-        <div style="background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-top: 5px solid #FF4B4B;">
+        <div style="background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-top: 5px solid #FF4B4B; margin-bottom: 20px;">
             <h3 style="color: white; margin-bottom: 5px; font-size: 18px;">📊 PCP Industrial</h3>
-            <p style="color: #888; font-size: 12px; margin-bottom: 15px;">👤 {st.session_state.user_email}</p>
-            <hr style="border: 0.5px solid #333;">
-            <div style="text-align: center; border: 1px solid #FF4B4B; padding: 10px; border-radius: 5px; background-color: #0E1117;">
+            <p style="color: #888; font-size: 11px;">👤 {st.session_state.user_email}</p>
+            <div style="text-align: center; border: 1px solid #FF4B4B; padding: 10px; border-radius: 5px; background-color: #0E1117; margin-top: 10px;">
                 <h2 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 24px;">
                     {agora.strftime('%H:%M:%S')}
                 </h2>
@@ -113,9 +125,14 @@ with col_sidebar:
             </div>
         </div>
     """, unsafe_allow_html=True)
+    
+    aba_selecionada = st.radio(
+        "MENU DE NAVEGAÇÃO",
+        ["➕ Lançar OP", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Catálogo Produtos", "📈 Resumo Cargas"]
+    )
 
 # ===============================
-# FUNÇÃO GANTT COM INDICADORES RESTAURADOS
+# FUNÇÃO GANTT
 # ===============================
 def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
     df_all = carregar_dados()
@@ -139,23 +156,26 @@ def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
             fig.update_yaxes(autorange="reversed", title="")
             fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
             
-            # Relógio da Timeline na base
+            # RELÓGIO DA TIMELINE DESLOCADO MAIS PARA BAIXO (y=-0.15)
             fig.add_annotation(
-                x=agora, y=-0.05, text=f"AGORA: {agora.strftime('%H:%M')}", 
+                x=agora, y=-0.15, text=f"AGORA: {agora.strftime('%H:%M')}", 
                 showarrow=False, xref="x", yref="paper", 
                 font=dict(color="red", size=14, family="Arial Black"),
                 bgcolor="rgba(0,0,0,0.8)"
             )
             
             fig.update_traces(textposition='inside', insidetextanchor='start', width=espessura_barra)
+            
+            # CONFIGURAÇÃO PARA OS BOTÕES (MODEBAR) APARECEREM NO TOPO
             fig.update_layout(
-                height=height_grafico, margin=dict(l=0, r=10, t=10, b=50), 
+                height=height_grafico, margin=dict(l=0, r=10, t=40, b=80), 
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                modebar=dict(orientation='h', bgcolor='rgba(0,0,0,0)', color='#FF4B4B', activecolor='#FFFFFF')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'scrollZoom': True})
 
-            # RESTAURAÇÃO DOS INDICADORES OCIOSOS / ATRASADOS
+            # INDICADORES OCIOSOS / ATRASADOS
             st.markdown("---")
             atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
             maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
@@ -166,75 +186,74 @@ def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
             c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
             if ociosas:
                 c3.warning(f"Sem carga: {len(ociosas)} máquinas")
-                with st.expander("Ver máquinas ociosas"):
+                with st.expander("Ver lista de máquinas ociosas"):
                     st.write(", ".join(ociosas))
             else:
                 c3.success("✅ Setor 100% Ocupado")
-        else:
-            st.info("ℹ️ Nenhuma produção cadastrada para este setor.")
-    else:
-        st.info("ℹ️ Banco de dados vazio.")
+        else: st.info("ℹ️ Sem produção cadastrada.")
+    else: st.info("ℹ️ Banco de dados vazio.")
 
-with col_main:
-    aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
+# ===============================
+# LÓGICA DE NAVEGAÇÃO
+# ===============================
+if aba_selecionada == "➕ Lançar OP":
+    with st.container(border=True):
+        st.subheader("➕ Lançar Nova Ordem de Produção")
+        c1, c2 = st.columns(2)
+        with c1:
+            maquina_sel = st.selectbox("🏭 Máquina", TODAS_MAQUINAS)
+            id_item_sel = st.selectbox("📌 ID_ITEM", df_produtos['id_item'].tolist()) if not df_produtos.empty else None
+            info = df_produtos[df_produtos['id_item'] == id_item_sel].iloc[0] if id_item_sel else {}
+        with c2:
+            op_num = st.text_input("🔢 Número da OP")
+            st.text_input("📝 DESCRIÇÃO", value=info.get('descricao', ''), disabled=True)
+            st.text_input("👥 Cliente", value=info.get('cliente', 'N/A'), disabled=True)
+        
+        c3, c4, c5 = st.columns(3)
+        qtd = c3.number_input("📊 Quantidade", min_value=1, value=int(info.get('qtd_carga', CARGA_UNIDADE)) if id_item_sel else CARGA_UNIDADE)
+        setup_min = c4.number_input("⏱️ Setup (min)", value=30)
+        sugestao = proximo_horario(maquina_sel)
+        data_ini = c5.date_input("📅 Início", sugestao.date()); hora_ini = c5.time_input("⏰ Hora", sugestao.time())
+        
+        if st.button("🚀 LANÇAR PRODUÇÃO", type="primary", use_container_width=True):
+            if op_num and id_item_sel:
+                inicio = datetime.combine(data_ini, hora_ini); fim_prod = inicio + timedelta(hours=qtd/CADENCIA_PADRAO)
+                with conectar() as conn:
+                    cur = conn.cursor()
+                    cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maquina_sel, f"{info.get('cliente','N/A')} | OP:{op_num}", id_item_sel, inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd))
+                    if setup_min > 0: conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maquina_sel, f"SETUP OP:{op_num}", "Ajuste", fim_prod.strftime('%Y-%m-%d %H:%M:%S'), (fim_prod + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, cur.lastrowid))
+                    conn.commit()
+                st.rerun()
 
-    with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=450)
-    with aba6: plotar_gantt(MAQUINAS_SOPRO, height_grafico=1100, espessura_barra=0.65)
-    
-    with aba1:
-        with st.container(border=True):
-            st.subheader("➕ Lançar Nova Ordem de Produção")
-            c1, c2 = st.columns(2)
-            with c1:
-                maquina_sel = st.selectbox("🏭 Máquina", TODAS_MAQUINAS)
-                id_item_sel = st.selectbox("📌 ID_ITEM", df_produtos['id_item'].tolist()) if not df_produtos.empty else None
-                info = df_produtos[df_produtos['id_item'] == id_item_sel].iloc[0] if id_item_sel else {}
-            with c2:
-                op_num = st.text_input("🔢 Número da OP")
-                st.text_input("📝 DESCRIÇÃO", value=info.get('descricao', ''), disabled=True)
-                st.text_input("👥 Cliente", value=info.get('cliente', 'N/A'), disabled=True)
-            
-            c3, c4, c5 = st.columns(3)
-            qtd = c3.number_input("📊 Quantidade", min_value=1, value=int(info.get('qtd_carga', CARGA_UNIDADE)) if id_item_sel else CARGA_UNIDADE)
-            setup_min = c4.number_input("⏱️ Setup (min)", value=30)
-            sugestao = proximo_horario(maquina_sel)
-            data_ini = c5.date_input("📅 Início", sugestao.date()); hora_ini = c5.time_input("⏰ Hora", sugestao.time())
-            
-            if st.button("🚀 LANÇAR PRODUÇÃO", type="primary", use_container_width=True):
-                if op_num and id_item_sel:
-                    inicio = datetime.combine(data_ini, hora_ini); fim_prod = inicio + timedelta(hours=qtd/CADENCIA_PADRAO)
-                    with conectar() as conn:
-                        cur = conn.cursor()
-                        cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maquina_sel, f"{info.get('cliente','N/A')} | OP:{op_num}", id_item_sel, inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd))
-                        if setup_min > 0: conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maquina_sel, f"SETUP OP:{op_num}", "Ajuste", fim_prod.strftime('%Y-%m-%d %H:%M:%S'), (fim_prod + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, cur.lastrowid))
-                        conn.commit()
-                    st.success("✅ Lançado com sucesso!"); st.rerun()
+elif aba_selecionada == "🎨 Serigrafia":
+    plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=500)
 
-    with aba3:
-        st.subheader("⚙️ Gerenciar Produção")
-        df_ger = carregar_dados()
-        if not df_ger.empty:
-            for _, prod in df_ger[df_ger["status"] == "Pendente"].sort_values("inicio").iterrows():
-                with st.expander(f"📦 {prod['maquina']} | {prod['pedido']}"):
-                    col_a, col_b = st.columns([4, 1])
-                    col_a.write(f"Início: {prod['inicio'].strftime('%d/%m %H:%M')} | Fim: {prod['fim'].strftime('%H:%M')} | Qtd: {int(prod['qtd'])} un")
-                    if col_b.button("✅ Concluir", key=f"ok_{prod['id']}"):
-                        with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
-                        st.rerun()
-                    if col_b.button("🗑️ Apagar", key=f"del_{prod['id']}"):
-                        with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
-                        st.rerun()
+elif aba_selecionada == "🍼 Sopro":
+    plotar_gantt(MAQUINAS_SOPRO, height_grafico=1200, espessura_barra=0.65)
 
-    with aba4:
-        st.subheader("📋 Catálogo Google Sheets")
-        st.dataframe(df_produtos, use_container_width=True)
+elif aba_selecionada == "⚙️ Gerenciar":
+    st.subheader("⚙️ Gerenciar Produção")
+    df_ger = carregar_dados()
+    if not df_ger.empty:
+        for _, prod in df_ger[df_ger["status"] == "Pendente"].sort_values("inicio").iterrows():
+            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']}"):
+                col_a, col_b = st.columns([4, 1])
+                col_a.write(f"Início: {prod['inicio'].strftime('%d/%m %H:%M')} | Fim: {prod['fim'].strftime('%H:%M')} | Qtd: {int(prod['qtd'])} un")
+                if col_b.button("✅ Concluir", key=f"ok_{prod['id']}"):
+                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
+                    st.rerun()
+                if col_b.button("🗑️ Apagar", key=f"del_{prod['id']}"):
+                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
+                    st.rerun()
 
-    with aba5:
-        st.subheader(f"📈 Resumo de Cargas (Base: {CARGA_UNIDADE} un)")
-        df_c = carregar_dados()
-        if not df_c.empty:
-            df_p = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
-            st.metric("Total Sopro (Cargas)", f"{df_p[df_p['maquina'].isin(MAQUINAS_SOPRO)]['qtd'].sum() / CARGA_UNIDADE:.1f}")
-            st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
+elif aba_selecionada == "📋 Catálogo Produtos":
+    st.dataframe(df_produtos, use_container_width=True)
 
-st.markdown(f"<p style='text-align: right; color: #444; font-size: 10px;'>v3.9.2 | Refresh 2min | {agora.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
+elif aba_selecionada == "📈 Resumo Cargas":
+    df_c = carregar_dados()
+    if not df_c.empty:
+        df_p = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
+        st.metric("Total Sopro (Cargas)", f"{df_p[df_p['maquina'].isin(MAQUINAS_SOPRO)]['qtd'].sum() / CARGA_UNIDADE:.1f}")
+        st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
+
+st.markdown(f"<p style='text-align: right; color: #444; font-size: 10px;'>v4.0 | Refresh 2min | {agora.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)

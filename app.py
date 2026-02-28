@@ -49,9 +49,15 @@ agora = datetime.now(fuso_br).replace(tzinfo=None)
 def conectar():
     return sqlite3.connect("pcp.db", check_same_thread=False)
 
+# --- SCRIPT DE PROTEÇÃO (CORRIGE O ERRO KEYERROR QTD) ---
 with conectar() as conn:
     conn.execute("CREATE TABLE IF NOT EXISTS agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, maquina TEXT, pedido TEXT, item TEXT, inicio TEXT, fim TEXT, status TEXT, qtd REAL)")
     conn.execute("CREATE TABLE IF NOT EXISTS produtos (codigo TEXT PRIMARY KEY, descricao TEXT, cliente TEXT)")
+    # Verifica se a coluna qtd existe, se não, adiciona (para quem já tinha o banco antigo)
+    try:
+        conn.execute("ALTER TABLE agenda ADD COLUMN qtd REAL DEFAULT 0")
+    except:
+        pass # Coluna já existe
 
 # ===============================
 # 3. FUNÇÕES DE APOIO
@@ -62,7 +68,11 @@ def carregar_dados():
     if not df.empty:
         df["inicio"] = pd.to_datetime(df["inicio"])
         df["fim"] = pd.to_datetime(df["fim"])
-        # Criar rótulo de texto para o gráfico (Início da barra)
+        
+        # Garantir que a coluna qtd seja tratada como número para evitar erro no lambda
+        df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
+        
+        # Gerar rótulo para o gráfico (Texto à esquerda)
         df["rotulo_grafico"] = df.apply(lambda r: f"{r['pedido']} | Qtd: {int(r['qtd'])}" if r['qtd'] > 0 else r['pedido'], axis=1)
     return df
 
@@ -79,13 +89,20 @@ def proximo_horario(maq):
     return agora
 
 # ===============================
-# 4. INTERFACE
+# 4. INTERFACE PRINCIPAL
 # ===============================
 st.title("🏭 Gestão de Produção Industrial")
 
+with st.sidebar:
+    st.title("👤 Usuário")
+    st.write(f"🕒 {agora.strftime('%H:%M:%S')}")
+    if st.button("Sair"):
+        st.session_state.auth_ok = False
+        st.rerun()
+
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Novo Pedido", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo"])
 
-# --- ABA 2: GANTT (MELHORIA VISUAL DE TEXTO) ---
+# --- ABA 2: GANTT ---
 with aba2:
     st.subheader("Cronograma de Máquinas")
     df_g = carregar_dados()
@@ -94,36 +111,31 @@ with aba2:
         df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
         
         fig = px.timeline(
-            df_g, 
-            x_start="inicio", 
-            x_end="fim", 
-            y="maquina", 
-            color="status_cor", 
-            text="rotulo_grafico", # Usando o novo rótulo com Qtd
+            df_g, x_start="inicio", x_end="fim", y="maquina", 
+            color="status_cor", text="rotulo_grafico",
             category_orders={"maquina": MAQUINAS},
             color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         
-        # AJUSTE PARA O TEXTO FICAR NO INÍCIO (ESQUERDA)
+        # FORMATAÇÃO DO TEXTO À ESQUERDA (CONFORME SUA IMAGEM)
         fig.update_traces(
             textposition='inside', 
-            insidetextanchor='start', # Alinha no começo da barra
+            insidetextanchor='start',
             textfont=dict(size=12, color="white")
         )
         
-        fig.update_yaxes(autorange="reversed", title="Máquinas")
+        fig.update_yaxes(autorange="reversed")
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
         fig.add_annotation(x=agora, y=1.05, yref="paper", text=f"⏱️ AGORA: {agora.strftime('%H:%M')}", showarrow=False, font=dict(color="white", size=14), bgcolor="red", borderpad=4)
         st.plotly_chart(fig, use_container_width=True)
     
-    # Cards de Status (Atraso)
-    st.markdown("---")
-    cols_avisos = st.columns(len(MAQUINAS))
+    # Cards de Status
+    cols = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
-        df_m_p = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
-        if df_m_p.empty: cols_avisos[i].warning(f"⚠️ {m.upper()}\n\nSem carga.")
-        elif not df_m_p[df_m_p["fim"] < agora].empty: cols_avisos[i].error(f"🚨 {m.upper()}\n\nEM ATRASO")
-        else: cols_avisos[i].success(f"✅ {m.upper()}\n\nEm dia.")
+        df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
+        if df_m.empty: cols[i].warning(f"⚠️ {m.upper()}\n\nSem carga.")
+        elif not df_m[df_m["fim"] < agora].empty: cols[i].error(f"🚨 {m.upper()}\n\nEM ATRASO")
+        else: cols[i].success(f"✅ {m.upper()}\n\nEm dia.")
 
 # --- ABA 1: NOVO PEDIDO ---
 with aba1:
@@ -148,7 +160,7 @@ with aba1:
         set_n = c2.number_input("Setup (min)", value=30)
         c3, c4 = st.columns(2)
         dat_n = c3.date_input("Data", sugestao.date()); hor_n = c4.time_input("Hora", sugestao.time())
-        if st.form_submit_button("Confirmar Lançamento"):
+        if st.form_submit_button("Confirmar"):
             if ped_n and p_sel:
                 ini = datetime.combine(dat_n, hor_n)
                 fim = ini + timedelta(hours=qtd_n/CADENCIA)
@@ -190,14 +202,14 @@ with aba3:
                             st.rerun()
     with t_c:
         if not df_ger.empty:
-            df_con = df_ger[df_ger["status"] == "Concluído"]
+            df_con = df_ger[df_ger["status"] == "Concluído"].sort_values("fim", ascending=False)
             st.dataframe(df_con, use_container_width=True)
 
 # --- ABA 4: CATÁLOGO ---
 with aba4:
     with st.form("f_prod"):
         c1, c2, c3 = st.columns(3); cod = c1.text_input("Código"); des = c2.text_input("Descrição"); cli = c3.text_input("Cliente")
-        if st.form_submit_button("Salvar"):
+        if st.form_submit_button("Salvar Produto"):
             with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (cod, des, cli))
             st.rerun()
     st.dataframe(carregar_produtos(), use_container_width=True)

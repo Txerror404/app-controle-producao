@@ -53,8 +53,11 @@ def carregar_produtos_google():
         # Baixar CSV da planilha publicada
         df = pd.read_csv(GOOGLE_SHEETS_URL, sep=',', encoding='utf-8')
         
-        # Limpar nomes das colunas (remover espaços e caracteres especiais)
+        # Limpar nomes das colunas (remover espaços extras, mas manter underline)
         df.columns = df.columns.str.strip()
+        
+        # Debug: mostrar colunas encontradas (opcional, pode remover depois)
+        # st.write("Colunas encontradas:", df.columns.tolist())
         
         # Garantir que ID_ITEM existe
         if 'ID_ITEM' not in df.columns:
@@ -64,11 +67,20 @@ def carregar_produtos_google():
         # Usar ID_ITEM como identificador principal
         df['id_item'] = df['ID_ITEM'].astype(str).str.strip()
         
-        # Descrição
+        # Descrição - usando DESCRIÇÃO_1 (com underline)
         if 'DESCRIÇÃO_1' in df.columns:
             df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip()
         else:
-            df['descricao'] = ''
+            # Tentar variações do nome
+            desc_col = None
+            for col in df.columns:
+                if 'DESCRIÇÃO' in col.upper() or 'DESCRICAO' in col.upper():
+                    desc_col = col
+                    break
+            if desc_col:
+                df['descricao'] = df[desc_col].astype(str).str.strip()
+            else:
+                df['descricao'] = ''
         
         # Cliente - se não existir ou estiver vazio, preencher com "N/A"
         if 'CLIENTE' in df.columns:
@@ -213,7 +225,7 @@ with aba2:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP (COM ID_ITEM E CLIENTE DA PLANILHA)
+# ABA 1 - LANÇAR OP (COM DESCRIÇÃO_1 CORRIGIDA)
 # ===============================
 with aba1:
     with st.container(border=True):
@@ -230,7 +242,7 @@ with aba1:
             if not df_produtos.empty:
                 # Lista de produtos para selectbox (mostrando ID_ITEM + descrição)
                 opcoes_prod = df_produtos['descricao_completa'].tolist()
-                produto_sel = st.selectbox("📦 Produto (ID_ITEM - Descrição)", opcoes_prod, key="prod_lanc")
+                produto_sel = st.selectbox("📦 Produto (ID_ITEM - DESCRIÇÃO_1)", opcoes_prod, key="prod_lanc")
                 
                 # Extrair ID_ITEM do produto selecionado (parte antes do " - ")
                 id_item_sel = produto_sel.split(" - ")[0] if " - " in produto_sel else produto_sel
@@ -425,4 +437,4 @@ col_r1, col_r2, col_r3 = st.columns(3)
 with col_r1:
     st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
 with col_r3:
-    st.caption("🏭 PCP Industrial v3.1 - ID_ITEM + Cliente N/A")
+    st.caption("🏭 PCP Industrial v3.2 - DESCRIÇÃO_1 corrigida")

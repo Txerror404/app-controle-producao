@@ -93,7 +93,7 @@ st.markdown(f"""
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
 # ============================================================
-# ABA 2 - GANTT (REGULA DE 3H + RELÓGIO + DATAS)
+# ABA 2 - GANTT + CARDS DE ACOMPANHAMENTO (POSIÇÃO CORRIGIDA)
 # ============================================================
 with aba2:
     df_g = carregar_dados()
@@ -131,8 +131,22 @@ with aba2:
         )
         
         fig.update_traces(textposition='inside', insidetextanchor='start', width=0.85)
-        fig.update_layout(height=600, margin=dict(l=10, r=10, t=100, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+        fig.update_layout(height=500, margin=dict(l=10, r=10, t=100, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
+
+        # --- CARDS DE ACOMPANHAMENTO NA PARTE DE BAIXO DA ABA 2 ---
+        st.markdown("---")
+        atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
+        maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
+        ociosas = [m for m in MAQUINAS if m not in maqs_em_uso]
+        
+        col_c1, col_c2, col_c3 = st.columns(3)
+        col_c1.metric("🚨 OPs ATRASADAS", f"{atrasadas} itens")
+        col_c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
+        if ociosas:
+            col_c3.warning(f"Sem programação: {', '.join(ociosas)}")
+        else:
+            col_c3.success("✅ Todas as máquinas ocupadas")
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
@@ -227,39 +241,24 @@ with aba4:
                 st.rerun()
 
 # ===============================
-# ABA 5 - CARGAS E MONITORAMENTO
+# ABA 5 - CARGAS
 # ===============================
 with aba5:
-    st.subheader(f"📈 Resumo Operacional")
+    st.subheader(f"📈 Cargas por Máquina (Base: {CARGA_UNIDADE} unid/carga)")
     df_c = carregar_dados()
     if not df_c.empty:
-        # CÁLCULOS DOS CARDS DE ALERTAS (RESTAURADOS)
-        atrasadas = df_c[(df_c["fim"] < agora) & (df_c["status"].isin(["Pendente", "Setup"]))].shape[0]
-        maqs_em_uso = df_c[(df_c["inicio"] <= agora) & (df_c["fim"] >= agora) & (df_c["status"] != "Concluído")]["maquina"].unique()
-        ociosas = [m for m in MAQUINAS if m not in maqs_em_uso]
-        
-        # CARDS DE ALERTA
-        alert1, alert2 = st.columns(2)
-        alert1.metric("🚨 OPs ATRASADAS", f"{atrasadas} itens", delta_color="inverse")
-        alert2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)} maq", delta=", ".join(ociosas) if ociosas else "Nenhuma", delta_color="off")
-        
-        st.divider()
-        
-        # CARDS DE CARGA POR MÁQUINA
-        st.write(f"**Cargas Pendentes (Base: {CARGA_UNIDADE} unid/carga)**")
         df_prod_c = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
         cols = st.columns(4)
         for i, maq in enumerate(MAQUINAS):
             total_qtd = df_prod_c[df_prod_c["maquina"] == maq]["qtd"].sum()
             cols[i].metric(label=f"🏭 {maq.upper()}", value=f"{total_qtd / CARGA_UNIDADE:.1f} cargas", delta=f"{int(total_qtd)} unid")
-        
         with st.expander("📋 Detalhamento por OP"):
             for maq in MAQUINAS:
                 st.write(f"**{maq}**")
                 df_maq = df_prod_c[df_prod_c["maquina"] == maq]
                 if not df_maq.empty:
                     for _, row in df_maq.iterrows(): st.write(f"  • {row['pedido']}: {int(row['qtd'])} unid")
-                else: st.write("  • Nenhuma OP pendente")
+                else: st.write("  • Nenhuma OP")
 
 st.divider()
 st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')}")

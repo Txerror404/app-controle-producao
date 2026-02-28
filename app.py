@@ -225,25 +225,58 @@ with aba1:
             if not df_produtos.empty:
                 # Selectbox apenas para ID_ITEM
                 opcoes_id_item = df_produtos['id_item'].tolist()
-                id_item_sel = st.selectbox("📌 ID_ITEM", opcoes_id_item, key="id_item_lanc")
                 
-                # Buscar informações completas do produto pelo ID_ITEM selecionado
-                produto_info = df_produtos[df_produtos['id_item'] == id_item_sel]
-                if not produto_info.empty:
-                    info = produto_info.iloc[0]
-                    descricao_auto = info.get('descricao', '')
-                    cliente_auto = info.get('cliente', 'N/A')
-                    qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
-                    
-                    # Garantir que seja número
-                    try:
-                        qtd_carga_sugerida = float(qtd_carga_sugerida) if qtd_carga_sugerida else CARGA_UNIDADE
-                    except:
-                        qtd_carga_sugerida = CARGA_UNIDADE
-                else:
-                    descricao_auto = ''
-                    cliente_auto = "N/A"
+                # Verificar se já existe um ID selecionado no session state
+                if 'id_item_selecionado' not in st.session_state:
+                    st.session_state.id_item_selecionado = opcoes_id_item[0] if opcoes_id_item else None
+                
+                # Selectbox com callback para atualizar quando mudar
+                def atualizar_info():
+                    id_sel = st.session_state.id_item_lanc
+                    if id_sel:
+                        produto_info = df_produtos[df_produtos['id_item'] == id_sel]
+                        if not produto_info.empty:
+                            info = produto_info.iloc[0]
+                            st.session_state.descricao_auto = info.get('descricao', '')
+                            st.session_state.cliente_auto = info.get('cliente', 'N/A')
+                            st.session_state.qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
+                        else:
+                            st.session_state.descricao_auto = ''
+                            st.session_state.cliente_auto = 'N/A'
+                            st.session_state.qtd_carga_sugerida = CARGA_UNIDADE
+                
+                id_item_sel = st.selectbox(
+                    "📌 ID_ITEM", 
+                    opcoes_id_item, 
+                    key="id_item_lanc",
+                    on_change=atualizar_info
+                )
+                
+                # Inicializar session state se necessário
+                if 'descricao_auto' not in st.session_state:
+                    st.session_state.descricao_auto = ''
+                    st.session_state.cliente_auto = 'N/A'
+                    st.session_state.qtd_carga_sugerida = CARGA_UNIDADE
+                
+                # Buscar informações se não tiver no session state ainda
+                if id_item_sel and 'descricao_auto' not in st.session_state:
+                    produto_info = df_produtos[df_produtos['id_item'] == id_item_sel]
+                    if not produto_info.empty:
+                        info = produto_info.iloc[0]
+                        st.session_state.descricao_auto = info.get('descricao', '')
+                        st.session_state.cliente_auto = info.get('cliente', 'N/A')
+                        st.session_state.qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
+                
+                descricao_auto = st.session_state.get('descricao_auto', '')
+                cliente_auto = st.session_state.get('cliente_auto', 'N/A')
+                qtd_carga_sugerida = st.session_state.get('qtd_carga_sugerida', CARGA_UNIDADE)
+                
+                # Garantir que qtd_carga_sugerida seja número
+                try:
+                    qtd_carga_sugerida = float(qtd_carga_sugerida) if qtd_carga_sugerida else CARGA_UNIDADE
+                except:
                     qtd_carga_sugerida = CARGA_UNIDADE
+                    
             else:
                 st.error("❌ Não foi possível carregar produtos da planilha.")
                 id_item_sel = None
@@ -254,7 +287,7 @@ with aba1:
         with col2:
             op_num = st.text_input("🔢 Número da OP", key="op_lanc")
             
-            # Campo DESCRIÇÃO separado (readonly)
+            # Campo DESCRIÇÃO (readonly)
             descricao_in = st.text_input("📝 DESCRIÇÃO", value=descricao_auto, key="desc_lanc", disabled=True)
             
             # Campo Cliente (readonly)
@@ -289,7 +322,12 @@ with aba1:
                         """, (maquina_sel, f"SETUP OP:{op_num}", "Ajuste/Troca", 
                               fim_prod.strftime('%Y-%m-%d %H:%M:%S'), fim_setup.strftime('%Y-%m-%d %H:%M:%S'), 
                               "Setup", 0, producao_id))
-                st.success(f"✅ OP {op_num} lançada!"); 
+                st.success(f"✅ OP {op_num} lançada!")
+                
+                # Limpar session state após lançar
+                for key in ['id_item_selecionado', 'descricao_auto', 'cliente_auto', 'qtd_carga_sugerida']:
+                    if key in st.session_state:
+                        del st.session_state[key]
                 st.rerun()
             else:
                 if not op_num:

@@ -85,7 +85,7 @@ def proximo_horario(maq):
     return agora
 
 # ===============================
-# 4. SIDEBAR (RELÓGIO FIXO)
+# 4. SIDEBAR (RELÓGIO E EXPORTAÇÃO)
 # ===============================
 with st.sidebar:
     st.title(f"👤 {'ADMIN' if is_admin else 'OPERADOR'}")
@@ -96,9 +96,9 @@ with st.sidebar:
     df_exp = carregar_dados()
     if not df_exp.empty:
         csv = df_exp.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Exportar Dados (CSV)", csv, "pcp_william.csv", "text/csv", key="btn_export_sidebar")
+        st.download_button("📥 Baixar Produção (CSV)", csv, "pcp_william.csv", "text/csv", key="export_sidebar_key")
     
-    if st.button("Sair", key="btn_logout"):
+    if st.button("Sair do Sistema", key="logout_key"):
         st.session_state.auth_ok = False
         st.rerun()
 
@@ -113,7 +113,7 @@ with aba1:
     with col_a:
         st.subheader("Programar Produção")
         df_p = pd.read_sql_query("SELECT * FROM produtos", conectar())
-        with st.form("form_pedido_novo"):
+        with st.form("form_novo_pedido"):
             maq_s = st.selectbox("Máquina", MAQUINAS)
             p_lista = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
             p_sel = st.selectbox("Produto", [""] + p_lista)
@@ -124,9 +124,9 @@ with aba1:
             set_n = st.number_input("Setup Automático (min)", value=30)
             sug = proximo_horario(maq_s)
             c1, c2 = st.columns(2)
-            dat_n = c1.date_input("Data Início", sug.date(), key="input_date_new")
-            hor_n = c2.time_input("Hora Início", sug.time(), key="input_time_new")
-            if st.form_submit_button("Lançar Pedido + Setup"):
+            dat_n = c1.date_input("Data Início", sug.date(), key="date_new_lan")
+            hor_n = c2.time_input("Hora Início", sug.time(), key="time_new_lan")
+            if st.form_submit_button("Lançar"):
                 if ped_n and p_sel:
                     ini = datetime.combine(dat_n, hor_n); fim = ini + timedelta(hours=qtd_n/CADENCIA_PADRAO)
                     with conectar() as conn:
@@ -138,15 +138,15 @@ with aba1:
                             f_s = fim + timedelta(minutes=set_n)
                             conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
                                         (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, pedido_id))
-                    st.success("Lançado!"); st.rerun()
+                    st.success("Registrado!"); st.rerun()
     with col_b:
-        st.subheader("Setup Avulso")
-        with st.form("form_avulso_novo"):
+        st.subheader("Setup/Manutenção")
+        with st.form("form_novo_setup"):
             maq_av = st.selectbox("Máquina ", MAQUINAS); desc_av = st.text_input("Motivo"); dur_av = st.number_input("Duração (min)", value=60)
             sug_av = proximo_horario(maq_av)
             c3, c4 = st.columns(2)
-            d_av = c3.date_input("Data ", sug_av.date(), key="input_date_avulso")
-            h_av = c4.time_input("Hora ", sug_av.time(), key="input_time_avulso")
+            d_av = c3.date_input("Data ", sug_av.date(), key="date_av_lan")
+            h_av = c4.time_input("Hora ", sug_av.time(), key="time_av_lan")
             if st.form_submit_button("Lançar Setup"):
                 i_av = datetime.combine(d_av, h_av); f_av = i_av + timedelta(minutes=dur_av)
                 with conectar() as conn:
@@ -154,9 +154,9 @@ with aba1:
                                 (maq_av, "SETUP", desc_av, i_av.strftime('%Y-%m-%d %H:%M:%S'), f_av.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
                 st.rerun()
 
-# --- ABA 2: GANTT (COM RELÓGIO NA LINHA VERMELHA RESTAURADO) ---
+# --- ABA 2: GANTT (CORRIGIDO ERRO DE TYPEERROR) ---
 with aba2:
-    st.subheader("Cronograma Real-Time")
+    st.subheader("Cronograma Visual")
     df_g = carregar_dados()
     if not df_g.empty:
         df_g["status_cor"] = df_g["status"]
@@ -170,23 +170,23 @@ with aba2:
             color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         
-        # RESTAURAÇÃO: Relógio na Linha Vermelha
-        fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2, 
-                      annotation_text=f"AGORA: {agora.strftime('%H:%M')}", 
-                      annotation_position="top left", annotation_font_color="red")
-        
+        # CORREÇÃO DO ERRO: Adicionando linha e texto separadamente para evitar TypeError
+        fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
+        fig.add_annotation(x=agora, y=1, text=f"AGORA: {agora.strftime('%H:%M')}", 
+                           showarrow=False, yref="paper", xanchor="left", font=dict(color="red", size=12))
+
         fig.update_traces(textposition='inside', insidetextanchor='start',
-                         hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Item: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>")
+                         hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Qtd: %{customdata[4]}<extra></extra>")
         fig.update_yaxes(autorange="reversed")
         st.plotly_chart(fig, use_container_width=True)
 
-    # Cards de Status
-    cols_status = st.columns(len(MAQUINAS))
+    # Cards de Status Abaixo do Gráfico
+    cols_st = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
-        if df_m.empty: cols_status[i].warning(f"⚠️ {m.upper()}\n\nLivre")
-        elif not df_m[df_m["fim"] < agora].empty: cols_status[i].error(f"🚨 {m.upper()}\n\nATRASO")
-        else: cols_status[i].success(f"✅ {m.upper()}\n\nEm Dia")
+        if df_m.empty: cols_st[i].warning(f"⚠️ {m.upper()}\n\nLivre")
+        elif not df_m[df_m["fim"] < agora].empty: cols_st[i].error(f"🚨 {m.upper()}\n\nEM ATRASO")
+        else: cols_st[i].success(f"✅ {m.upper()}\n\nEm Dia")
 
 # --- ABA 3: GERENCIAR (CONGELADA) ---
 with aba3:
@@ -201,20 +201,20 @@ with aba3:
                     c1, c2 = st.columns(2)
                     with c1:
                         st.write(f"**Item:** {r['item']} | **Qtd:** {int(r['qtd'])}")
-                        if st.button("✅ CONCLUIR", key=f"btn_c_{r['id']}", use_container_width=True):
+                        if st.button("✅ CONCLUIR", key=f"c_{r['id']}", use_container_width=True):
                             with conectar() as c:
                                 c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
                                 c.execute("UPDATE agenda SET status='Concluído' WHERE vinculo_id=?", (r['id'],))
                             st.rerun()
-                        if is_admin and st.button("🗑️ EXCLUIR", key=f"btn_e_{r['id']}", use_container_width=True):
+                        if is_admin and st.button("🗑️ EXCLUIR", key=f"e_{r['id']}", use_container_width=True):
                             with conectar() as c:
                                 c.execute("DELETE FROM agenda WHERE id=?", (r['id'],)); c.execute("DELETE FROM agenda WHERE vinculo_id=?", (r['id'],))
                             st.rerun()
                     with c2:
                         if is_admin:
-                            nd = st.date_input("Mover Data", r['inicio'].date(), key=f"key_d_{r['id']}")
-                            nh = st.time_input("Mover Hora", r['inicio'].time(), key=f"key_t_{r['id']}")
-                            if st.button("Mover Pedido + Setup", key=f"btn_m_{r['id']}", use_container_width=True):
+                            nd = st.date_input("Mover Data", r['inicio'].date(), key=f"d_ed_{r['id']}")
+                            nh = st.time_input("Mover Hora", r['inicio'].time(), key=f"t_ed_{r['id']}")
+                            if st.button("Mover Pedido + Setup", key=f"m_ed_{r['id']}", use_container_width=True):
                                 ni = datetime.combine(nd, nh); ds = (ni - r['inicio']).total_seconds(); nf = r['fim'] + (ni - r['inicio'])
                                 with conectar() as c:
                                     c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (ni.strftime('%Y-%m-%d %H:%M:%S'), nf.strftime('%Y-%m-%d %H:%M:%S'), r['id']))
@@ -226,7 +226,7 @@ with aba3:
 # --- ABA 4: CATÁLOGO (CONGELADA) ---
 with aba4:
     if is_admin:
-        with st.form("form_prod_cat"):
+        with st.form("form_catalogo"):
             c1, c2, c3 = st.columns(3); co = c1.text_input("Código"); de = c2.text_input("Descrição"); cl = c3.text_input("Cliente")
             if st.form_submit_button("Salvar Produto"):
                 with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (co, de, cl)); st.rerun()
@@ -234,12 +234,12 @@ with aba4:
 
 # --- ABA 5: DASHBOARD ---
 with aba5:
-    st.subheader("Carga de Máquinas")
+    st.subheader("Ocupação de Máquina")
     df_dash = carregar_dados()
     if not df_dash.empty:
-        df_aberto = df_dash[df_dash["status"] != "Concluído"]
-        c_met = st.columns(len(MAQUINAS))
+        df_ab = df_dash[df_dash["status"] != "Concluído"]
+        c_m = st.columns(len(MAQUINAS))
         for i, m in enumerate(MAQUINAS):
-            horas = ((df_aberto[df_aberto["maquina"] == m]["fim"] - df_aberto[df_aberto["maquina"] == m]["inicio"]).dt.total_seconds() / 3600).sum()
-            c_met[i].metric(label=f"Carga {m}", value=f"{horas:.1f} h")
+            horas = ((df_ab[df_ab["maquina"] == m]["fim"] - df_ab[df_ab["maquina"] == m]["inicio"]).dt.total_seconds() / 3600).sum()
+            c_m[i].metric(label=f"Carga {m}", value=f"{horas:.1f} h")
             st.progress(min(horas / 120, 1.0))

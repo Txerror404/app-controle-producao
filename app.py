@@ -56,21 +56,26 @@ def carregar_produtos_google():
         # Limpar nomes das colunas (remover espaços e caracteres especiais)
         df.columns = df.columns.str.strip()
         
-        # Mapeamento das colunas baseado no seu cabeçalho
-        # Prioridade: CÓDIGO > ID_ITEM
-        if 'CÓDIGO' in df.columns and df['CÓDIGO'].notna().any():
-            df['codigo'] = df['CÓDIGO'].astype(str).str.strip()
-        else:
-            df['codigo'] = df['ID_ITEM'].astype(str).str.strip()
+        # Garantir que ID_ITEM existe
+        if 'ID_ITEM' not in df.columns:
+            st.error("❌ Coluna 'ID_ITEM' não encontrada na planilha!")
+            return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'descricao_completa', 'qtd_carga'])
+        
+        # Usar ID_ITEM como identificador principal
+        df['id_item'] = df['ID_ITEM'].astype(str).str.strip()
         
         # Descrição
-        df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip()
+        if 'DESCRIÇÃO_1' in df.columns:
+            df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip()
+        else:
+            df['descricao'] = ''
         
-        # Cliente
+        # Cliente - se não existir ou estiver vazio, preencher com "N/A"
         if 'CLIENTE' in df.columns:
             df['cliente'] = df['CLIENTE'].astype(str).str.strip()
+            df['cliente'] = df['cliente'].apply(lambda x: x if x and x != 'nan' and x != '' else 'N/A')
         else:
-            df['cliente'] = ''
+            df['cliente'] = 'N/A'
         
         # Quantidade por carga
         if 'QTD/CARGA' in df.columns:
@@ -89,11 +94,11 @@ def carregar_produtos_google():
             df['maquina'] = ''
         
         # Preencher valores nulos
-        df = df.fillna('')
+        df = df.fillna('N/A')
         
         # Criar campo 'descricao_completa' para exibição nos selects
         df['descricao_completa'] = df.apply(
-            lambda row: f"{row['codigo']} - {row['descricao']} ({row['cliente']})", 
+            lambda row: f"{row['id_item']} - {row['descricao']}", 
             axis=1
         )
         
@@ -102,7 +107,7 @@ def carregar_produtos_google():
     except Exception as e:
         st.error(f"❌ Erro ao carregar planilha: {e}")
         # Retorna DataFrame vazio com as colunas necessárias
-        return pd.DataFrame(columns=['codigo', 'descricao', 'cliente', 'descricao_completa', 'qtd_carga'])
+        return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'descricao_completa', 'qtd_carga'])
 
 def carregar_dados():
     with conectar() as c:
@@ -208,7 +213,7 @@ with aba2:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP (COM GOOGLE SHEETS)
+# ABA 1 - LANÇAR OP (COM ID_ITEM E CLIENTE DA PLANILHA)
 # ===============================
 with aba1:
     with st.container(border=True):
@@ -223,18 +228,19 @@ with aba1:
             maquina_sel = st.selectbox("🏭 Máquina", MAQUINAS, key="maq_lanc")
             
             if not df_produtos.empty:
-                # Lista de produtos para selectbox
+                # Lista de produtos para selectbox (mostrando ID_ITEM + descrição)
                 opcoes_prod = df_produtos['descricao_completa'].tolist()
-                produto_sel = st.selectbox("📦 Produto (da planilha Google)", opcoes_prod, key="prod_lanc")
+                produto_sel = st.selectbox("📦 Produto (ID_ITEM - Descrição)", opcoes_prod, key="prod_lanc")
                 
-                # Extrair código do produto selecionado
-                codigo_prod = produto_sel.split(" - ")[0] if " - " in produto_sel else produto_sel
+                # Extrair ID_ITEM do produto selecionado (parte antes do " - ")
+                id_item_sel = produto_sel.split(" - ")[0] if " - " in produto_sel else produto_sel
                 
-                # Buscar informações completas do produto
-                produto_info = df_produtos[df_produtos['codigo'] == codigo_prod]
+                # Buscar informações completas do produto pelo ID_ITEM
+                produto_info = df_produtos[df_produtos['id_item'] == id_item_sel]
                 if not produto_info.empty:
                     info = produto_info.iloc[0]
-                    cliente_auto = info.get('cliente', '')
+                    # Cliente vem da planilha ou "N/A"
+                    cliente_auto = info.get('cliente', 'N/A')
                     qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
                     
                     # Garantir que seja número
@@ -243,17 +249,18 @@ with aba1:
                     except:
                         qtd_carga_sugerida = CARGA_UNIDADE
                 else:
-                    cliente_auto = ""
+                    cliente_auto = "N/A"
                     qtd_carga_sugerida = CARGA_UNIDADE
             else:
                 st.error("❌ Não foi possível carregar produtos da planilha. Verifique a URL.")
                 produto_sel = None
-                cliente_auto = ""
+                id_item_sel = ""
+                cliente_auto = "N/A"
                 qtd_carga_sugerida = CARGA_UNIDADE
         
         with col2:
             op_num = st.text_input("🔢 Número da OP", key="op_lanc")
-            cliente_in = st.text_input("👥 Cliente", value=cliente_auto, key="cli_lanc")
+            cliente_in = st.text_input("👥 Cliente", value=cliente_auto, key="cli_lanc", disabled=True)  # Read-only
         
         col3, col4, col5 = st.columns(3)
         qtd = col3.number_input("📊 Quantidade", min_value=1, value=int(qtd_carga_sugerida), key="qtd_lanc")
@@ -271,7 +278,7 @@ with aba1:
                     cur.execute("""
                         INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) 
                         VALUES (?,?,?,?,?,?,?)
-                    """, (maquina_sel, f"{cliente_in} | OP:{op_num}", codigo_prod, 
+                    """, (maquina_sel, f"{cliente_in} | OP:{op_num}", id_item_sel, 
                           inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), 
                           "Pendente", qtd))
                     producao_id = cur.lastrowid
@@ -370,7 +377,7 @@ with aba4:
                     filtro_cliente = 'Todos'
             
             with col_f2:
-                busca = st.text_input("Buscar por código ou descrição")
+                busca = st.text_input("Buscar por ID_ITEM ou descrição")
             
             # Aplicar filtros
             df_filtrado = df_prod.copy()
@@ -379,7 +386,7 @@ with aba4:
             
             if busca:
                 df_filtrado = df_filtrado[
-                    df_filtrado['codigo'].astype(str).str.contains(busca, case=False, na=False) |
+                    df_filtrado['id_item'].astype(str).str.contains(busca, case=False, na=False) |
                     df_filtrado['descricao'].astype(str).str.contains(busca, case=False, na=False)
                 ]
         
@@ -418,4 +425,4 @@ col_r1, col_r2, col_r3 = st.columns(3)
 with col_r1:
     st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
 with col_r3:
-    st.caption("🏭 PCP Industrial v3.0 - Google Sheets")
+    st.caption("🏭 PCP Industrial v3.1 - ID_ITEM + Cliente N/A")

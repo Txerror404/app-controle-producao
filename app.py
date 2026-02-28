@@ -93,7 +93,7 @@ st.markdown(f"""
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
 # ============================================================
-# ABA 2 - GANTT (ÚNICA PARTE MODIFICADA: RELÓGIO + DATAS 3H)
+# ABA 2 - GANTT (AJUSTADO: RELÓGIO + DATAS 3H)
 # ============================================================
 with aba2:
     df_g = carregar_dados()
@@ -137,7 +137,7 @@ with aba2:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP (CONGELADA)
+# ABA 1 - LANÇAR OP
 # ===============================
 with aba1:
     with st.container(border=True):
@@ -178,7 +178,7 @@ with aba1:
                 st.success(f"✅ OP {op_num} lançada!"); st.rerun()
 
 # ===============================
-# ABA 3 - GERENCIAR (CONGELADA)
+# ABA 3 - GERENCIAR
 # ===============================
 with aba3:
     st.subheader("⚙️ Gerenciar Ordens de Produção")
@@ -201,7 +201,7 @@ with aba3:
                     with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); st.rerun()
 
 # ===============================
-# ABA 4 - CATÁLOGO (CONGELADA)
+# ABA 4 - CATÁLOGO
 # ===============================
 with aba4:
     st.subheader("📦 Catálogo de Produtos")
@@ -227,18 +227,21 @@ with aba4:
                 st.rerun()
 
 # ===============================
-# ABA 5 - CARGAS (CONGELADA)
+# ABA 5 - CARGAS (CARDS RESTAURADOS)
 # ===============================
 with aba5:
     st.subheader(f"📈 Cargas por Máquina (Base: {CARGA_UNIDADE} unid/carga)")
     df_c = carregar_dados()
     if not df_c.empty:
+        # --- BLOCO DOS CARDS ---
         df_prod_c = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
         cols = st.columns(4)
         for i, maq in enumerate(MAQUINAS):
             total_qtd = df_prod_c[df_prod_c["maquina"] == maq]["qtd"].sum()
             cols[i].metric(label=f"🏭 {maq.upper()}", value=f"{total_qtd / CARGA_UNIDADE:.1f} cargas", delta=f"{int(total_qtd)} unid")
-        with st.expander("📋 Detalhamento por OP"):
+        
+        # --- DETALHAMENTO ---
+        with st.expander("📋 Detalhamento por OP", expanded=True):
             for maq in MAQUINAS:
                 st.write(f"**{maq}**")
                 df_maq = df_prod_c[df_prod_c["maquina"] == maq]

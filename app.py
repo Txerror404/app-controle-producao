@@ -10,7 +10,7 @@ from streamlit_autorefresh import st_autorefresh
 # 1. CONFIGURAÇÃO E ACESSO
 # ===============================
 st.set_page_config(page_title="PCP William - Industrial", layout="wide")
-st_autorefresh(interval=30000, key="pcp_refresh")
+st_autorefresh(interval=30000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
 MAQUINAS = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
@@ -73,7 +73,7 @@ def carregar_dados():
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["inicio_format"] = df["inicio"].dt.strftime('%d/%m %H:%M')
         df["fim_format"] = df["fim"].dt.strftime('%d/%m %H:%M')
-        df["rotulo_grafico"] = df.apply(lambda r: "SETUP" if r['status'] == "Setup" else f"{r['pedido']} | Qtd: {int(r['qtd'])}", axis=1)
+        df["rotulo_grafico"] = df.apply(lambda r: "SETUP" if r['status'] == "Setup" else f"{r['pedido']} | {int(r['qtd'])}", axis=1)
     return df
 
 def proximo_horario(maq):
@@ -85,7 +85,7 @@ def proximo_horario(maq):
     return agora
 
 # ===============================
-# 4. SIDEBAR (RELÓGIO + EXPORTAÇÃO)
+# 4. SIDEBAR
 # ===============================
 with st.sidebar:
     st.title(f"👤 {'ADMIN' if is_admin else 'OPERADOR'}")
@@ -93,20 +93,19 @@ with st.sidebar:
     st.write(f"📅 {agora.strftime('%d/%m/%Y')}")
     st.markdown("---")
     
-    st.subheader("📥 Exportar")
     df_exp = carregar_dados()
     if not df_exp.empty:
         csv = df_exp.to_csv(index=False).encode('utf-8')
-        st.download_button("Baixar Dados (CSV)", csv, "pcp_william.csv", "text/csv")
+        st.download_button("📥 Baixar Dados (CSV)", csv, "pcp_william.csv", "text/csv")
     
-    if st.button("Sair do Sistema"):
+    if st.button("Sair"):
         st.session_state.auth_ok = False
         st.rerun()
 
 # ===============================
-# 5. ABAS PRINCIPAIS
+# 5. ABAS
 # ===============================
-aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançamentos", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Dashboard"])
+aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançamentos", "📊 Gantt", "⚙️ Gerenciar", "📦 Catálogo", "📈 Dashboard"])
 
 # --- ABA 1: LANÇAMENTOS ---
 with aba1:
@@ -114,7 +113,7 @@ with aba1:
     with col_a:
         st.subheader("Programar Produção")
         df_p = pd.read_sql_query("SELECT * FROM produtos", conectar())
-        with st.form("form_pedido"):
+        with st.form("form_pedido_novo"):
             maq_s = st.selectbox("Máquina", MAQUINAS)
             p_lista = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
             p_sel = st.selectbox("Produto", [""] + p_lista)
@@ -125,12 +124,11 @@ with aba1:
             set_n = st.number_input("Setup Automático (min)", value=30)
             sug = proximo_horario(maq_s)
             c1, c2 = st.columns(2)
-            dat_n = c1.date_input("Data Início", sug.date())
-            hor_n = c2.time_input("Hora Início", sug.time())
+            dat_n = c1.date_input("Data Início", sug.date(), key="new_date_prod")
+            hor_n = c2.time_input("Hora Início", sug.time(), key="new_time_prod")
             if st.form_submit_button("Lançar Pedido + Setup"):
                 if ped_n and p_sel:
-                    ini = datetime.combine(dat_n, hor_n)
-                    fim = ini + timedelta(hours=qtd_n/CADENCIA_PADRAO)
+                    ini = datetime.combine(dat_n, hor_n); fim = ini + timedelta(hours=qtd_n/CADENCIA_PADRAO)
                     with conectar() as conn:
                         cur = conn.cursor()
                         cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
@@ -144,106 +142,15 @@ with aba1:
 
     with col_b:
         st.subheader("Setup Avulso")
-        with st.form("form_avulso"):
+        with st.form("form_avulso_novo"):
             maq_av = st.selectbox("Máquina ", MAQUINAS)
             desc_av = st.text_input("Motivo")
             dur_av = st.number_input("Duração (minutos)", value=60)
             sug_av = proximo_horario(maq_av)
             c3, c4 = st.columns(2)
-            d_av = c3.date_input("Data  ", sug_av.date())
-            h_av = c4.time_input("Hora  ", sug_av.time())
+            d_av = c3.date_input("Data", sug_av.date(), key="avulso_date")
+            h_av = c4.time_input("Hora", sug_av.time(), key="avulso_time")
             if st.form_submit_button("Lançar Setup"):
                 i_av = datetime.combine(d_av, h_av); f_av = i_av + timedelta(minutes=dur_av)
                 with conectar() as conn:
-                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                                (maq_av, "SETUP", desc_av, i_av.strftime('%Y-%m-%d %H:%M:%S'), f_av.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
-                st.success("Salvo!"); st.rerun()
-
-# --- ABA 2: GANTT ---
-with aba2:
-    st.subheader("Cronograma Visual")
-    col_z1, col_z2 = st.columns([1, 3])
-    zoom = col_z1.selectbox("Filtro de Visão", ["Visão Geral", "Próximas 24h", "Próximos 7 Dias"])
-    
-    df_g = carregar_dados()
-    if not df_g.empty:
-        if zoom == "Próximas 24h": df_g = df_g[df_g["inicio"] <= agora + timedelta(hours=24)]
-        elif zoom == "Próximos 7 Dias": df_g = df_g[df_g["inicio"] <= agora + timedelta(days=7)]
-
-        df_g["status_cor"] = df_g["status"]
-        df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
-        
-        fig = px.timeline(df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="rotulo_grafico",
-                         category_orders={"maquina": MAQUINAS},
-                         custom_data=["pedido", "inicio_format", "fim_format", "item", "qtd"],
-                         color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"})
-        fig.update_traces(textposition='inside', insidetextanchor='start',
-                         hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<extra></extra>")
-        fig.update_yaxes(autorange="reversed")
-        fig.add_vline(x=agora, line_dash="dash", line_color="red")
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Cards de Status
-    cols = st.columns(len(MAQUINAS))
-    for i, m in enumerate(MAQUINAS):
-        df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
-        if df_m.empty: cols[i].warning(f"⚠️ {m.upper()}\n\nLivre")
-        elif not df_m[df_m["fim"] < agora].empty: cols[i].error(f"🚨 {m.upper()}\n\nATRASO")
-        else: cols[i].success(f"✅ {m.upper()}\n\nOperando")
-
-# --- ABA 3: GERENCIAR (CONGELADA) ---
-with aba3:
-    df_ger = carregar_dados()
-    t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])
-    with t_p:
-        if not df_ger.empty:
-            df_ab = df_ger[df_ger["status"] != "Concluído"].sort_values("inicio")
-            for _, r in df_ab.iterrows():
-                if r['status'] == "Setup" and r['vinculo_id'] is not None: continue 
-                with st.expander(f"{r['maquina']} | {r['pedido']}"):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.write(f"**Item:** {r['item']} | **Qtd:** {int(r['qtd'])}")
-                        if st.button("✅ CONCLUIR", key=f"c{r['id']}", use_container_width=True):
-                            with conectar() as c:
-                                c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
-                                c.execute("UPDATE agenda SET status='Concluído' WHERE vinculo_id=?", (r['id'],))
-                            st.rerun()
-                        if is_admin and st.button("🗑️ EXCLUIR", key=f"d{r['id']}", use_container_width=True):
-                            with conectar() as c:
-                                c.execute("DELETE FROM agenda WHERE id=?", (r['id'],)); c.execute("DELETE FROM agenda WHERE vinculo_id=?", (r['id'],))
-                            st.rerun()
-                    with c2:
-                        if is_admin:
-                            nd = st.date_input("Nova Data", r['inicio'].date(), key=f"d{r['id']}")
-                            nh = st.time_input("Nova Hora", r['inicio'].time(), key=f"h{r['id']}")
-                            if st.button("Mover Pedido + Setup", key=f"up{r['id']}", use_container_width=True):
-                                ni = datetime.combine(nd, nh); ds = (ni - r['inicio']).total_seconds(); nf = r['fim'] + (ni - r['inicio'])
-                                with conectar() as c:
-                                    c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (ni.strftime('%Y-%m-%d %H:%M:%S'), nf.strftime('%Y-%m-%d %H:%M:%S'), r['id']))
-                                    c.execute("UPDATE agenda SET inicio = datetime(inicio, ? || ' seconds'), fim = datetime(fim, ? || ' seconds') WHERE vinculo_id = ?", (ds, ds, r['id']))
-                                st.rerun()
-    with t_c:
-        if not df_ger.empty: st.dataframe(df_ger[df_ger["status"] == "Concluído"], use_container_width=True)
-
-# --- ABA 4: CATÁLOGO (CONGELADA) ---
-with aba4:
-    if is_admin:
-        with st.form("f_prod"):
-            c1, c2, c3 = st.columns(3); co = c1.text_input("Código"); de = c2.text_input("Descrição"); cl = c3.text_input("Cliente")
-            if st.form_submit_button("Salvar"):
-                with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (co, de, cl)); st.rerun()
-    st.dataframe(pd.read_sql_query("SELECT * FROM produtos", conectar()), use_container_width=True)
-
-# --- ABA 5: DASHBOARD ---
-
-with aba5:
-    st.subheader("Ocupação de Máquina")
-    df_dash = carregar_dados()
-    if not df_dash.empty:
-        df_aberto = df_dash[df_dash["status"] != "Concluído"]
-        c_met = st.columns(len(MAQUINAS))
-        for i, m in enumerate(MAQUINAS):
-            horas = ((df_aberto[df_aberto["maquina"] == m]["fim"] - df_aberto[df_aberto["maquina"] == m]["inicio"]).dt.total_seconds() / 3600).sum()
-            c_met[i].metric(label=f"Carga {m}", value=f"{horas:.1f} h")
-            st.progress(min(horas / 120, 1.0))
+                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim,

@@ -37,7 +37,7 @@ def carregar_dados():
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["h_ini"] = df["inicio"].dt.strftime('%H:%M')
         df["h_fim"] = df["fim"].dt.strftime('%H:%M')
-        # FORMATO EXATO DO TEXTO QUE VOCÊ PRECISA
+        # Rótulo aprovado: NOME DO PEDIDO + QUANTIDADE
         df["rotulo_barra"] = df.apply(lambda r: "SET.UP" if r['status'] == "Setup" else f"{r['pedido']}<br>QUANT: {int(r['qtd'])}", axis=1)
     return df
 
@@ -64,7 +64,6 @@ is_admin = st.session_state.user_email == ADMIN_EMAIL
 # ===============================
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançamentos", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
-# ABA 1: LANÇAMENTOS
 with aba1:
     col_a, col_b = st.columns(2)
     with col_a:
@@ -94,7 +93,7 @@ with aba1:
                                 conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, p_id))
                         st.rerun()
 
-# --- ABA 2: GANTT (CORREÇÃO DA ESPESSURA E ESCALA) ---
+# --- ABA 2: GANTT COM HORÁRIO MAIS ALTO ---
 with aba2:
     df_g = carregar_dados()
     if not df_g.empty:
@@ -108,38 +107,44 @@ with aba2:
             color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         
-        # ESCALA DE 2 DIAS COM GRADE SUAVE
         fig.update_xaxes(
             type='date',
             range=[agora - timedelta(hours=2), agora + timedelta(hours=46)],
             dtick=10800000, # 3 horas
             showgrid=True, gridcolor='rgba(255,255,255,0.1)',
-            tickformat="%d/%m\n%H:%M"
+            tickformat="%d/%m\n%H:%M",
+            side="bottom"
         )
         
-        # VOLTANDO AS BARRAS GROSSAS (TRILHOS)
         fig.update_yaxes(autorange="reversed", title="")
         
+        # LINHA AGORA
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-        fig.add_annotation(x=agora, y=1.02, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, yref="paper", font=dict(color="red", size=14))
+        
+        # ANOTAÇÃO SUBIDA (y=1.1) PARA NÃO BATER NAS BARRAS
+        fig.add_annotation(
+            x=agora, y=1.1, 
+            text=f"AGORA: {agora.strftime('%H:%M')}", 
+            showarrow=False, yref="paper", 
+            font=dict(color="red", size=16, family="Arial Black")
+        )
         
         fig.update_traces(
             textposition='inside', 
             insidetextanchor='start',
-            width=0.8, # FORÇA A BARRA A SER GROSSA
+            width=0.85, # Mantém barras grossas
             hovertemplate="<b>Pedido: %{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Qtd: %{customdata[4]}<extra></extra>"
         )
         
         fig.update_layout(
-            height=500, # Altura ideal para 4 máquinas
-            bargap=0.1, # Espaço mínimo entre as máquinas para parecer trilho
-            margin=dict(l=10, r=10, t=40, b=10),
+            height=600,
+            bargap=0.05,
+            margin=dict(l=10, r=10, t=80, b=10), # Aumentei margem superior (t=80)
             legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center")
         )
         st.plotly_chart(fig, use_container_width=True)
 
-# --- ABAS 3, 4 E 5 (MANTIDAS) ---
-with aba3:
+with aba3: # GERENCIAR
     df_ger = carregar_dados()
     if not df_ger.empty:
         df_ab = df_ger[df_ger["status"] != "Concluído"].sort_values(["maquina", "inicio"])
@@ -169,8 +174,7 @@ with aba3:
                                 c.execute("UPDATE agenda SET inicio=?, fim=datetime(fim, ? || ' seconds') WHERE vinculo_id=?", (n_f.strftime('%Y-%m-%d %H:%M:%S'), s_d, r['id']))
                             st.rerun()
 
-with aba4:
-    st.dataframe(pd.read_sql_query("SELECT * FROM produtos", conectar()), use_container_width=True)
+with aba4: st.dataframe(pd.read_sql_query("SELECT * FROM produtos", conectar()), use_container_width=True)
 
 with aba5:
     st.subheader(f"Total de Cargas da Semana (Base: {CARGA_UNIDADE} un)")

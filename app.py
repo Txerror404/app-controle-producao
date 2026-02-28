@@ -194,25 +194,60 @@ with aba1:
 # ===============================
 # ABA 3 - GERENCIAR
 # ===============================
+# ===============================
+# ABA 3 - GERENCIAR (CORRIGIDA)
+# ===============================
 with aba3:
     st.subheader("⚙️ Gerenciar Ordens de Produção")
     df_ger = carregar_dados()
+    
     if not df_ger.empty:
+        # Mostra apenas produções pendentes (não concluídas)
         producoes = df_ger[df_ger["status"] == "Pendente"].sort_values("inicio")
-        for _, prod in producoes.iterrows():
-            setup = df_ger[(df_ger["vinculo_id"] == prod["id"]) & (df_ger["status"] == "Setup")]
-            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
-                col_a, col_b, col_c = st.columns([3, 1, 1])
-                with col_a:
-                    st.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')}")
-                    st.write(f"**Quantidade:** {int(prod['qtd'])} unidades")
-                    if not setup.empty:
-                        s = setup.iloc[0]
-                        st.write(f"🔧 **Setup:** {s['inicio'].strftime('%H:%M')} às {s['fim'].strftime('%H:%M')}")
-                if col_b.button("✅ Concluir", key=f"conc_{prod['id']}"):
-                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); st.rerun()
-                if col_c.button("🗑️ Apagar", key=f"del_{prod['id']}"):
-                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); st.rerun()
+        
+        if producoes.empty:
+            st.info("✅ Nenhuma produção pendente no momento.")
+        else:
+            for _, prod in producoes.iterrows():
+                # Busca o setup vinculado a esta produção
+                setup = df_ger[(df_ger["vinculo_id"] == prod["id"]) & (df_ger["status"] == "Setup")]
+                
+                with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
+                    col_a, col_b, col_c = st.columns([3, 1, 1])
+                    
+                    with col_a:
+                        st.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')}")
+                        st.write(f"**Quantidade:** {int(prod['qtd'])} unidades")
+                        if not setup.empty:
+                            s = setup.iloc[0]
+                            st.write(f"🔧 **Setup:** {s['inicio'].strftime('%H:%M')} às {s['fim'].strftime('%H:%M')}")
+                    
+                    # Botão CONCLUIR com tratamento de erro
+                    if col_b.button("✅ Concluir", key=f"conc_{prod['id']}"):
+                        try:
+                            with conectar() as conn:
+                                # Conclui a produção e seu setup (se houver)
+                                conn.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", 
+                                           (prod['id'], prod['id']))
+                                conn.commit()  # Garante que a alteração seja salva
+                            st.success(f"OP {prod['pedido']} concluída com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao concluir: {e}")
+                    
+                    # Botão APAGAR com tratamento de erro
+                    if col_c.button("🗑️ Apagar", key=f"del_{prod['id']}"):
+                        try:
+                            with conectar() as conn:
+                                conn.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", 
+                                           (prod['id'], prod['id']))
+                                conn.commit()
+                            st.success(f"OP {prod['pedido']} apagada.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao apagar: {e}")
+    else:
+        st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
 # ABA 4 - CATÁLOGO

@@ -9,8 +9,9 @@ from streamlit_autorefresh import st_autorefresh
 # ===============================
 # 1. CONFIGURAÇÃO E ACESSO
 # ===============================
-st.set_page_config(page_title="PCP Industrial", layout="wide")
+st.set_page_config(page_title="PCP Industrial v4.5", layout="wide")
 
+# Refresh automático a cada 2 minutos
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
@@ -27,17 +28,16 @@ agora = datetime.now(fuso_br).replace(tzinfo=None)
 
 GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
-# CSS PARA POSICIONAR ELEMENTOS CONFORME MARCAÇÃO
+# CSS PARA POSICIONAMENTO PERSONALIZADO (MARCAÇÕES DO USUÁRIO)
 st.markdown("""
     <style>
         .block-container {padding-top: 0.5rem;}
-        /* Move os botões do Plotly (zoom, etc) para o topo */
+        /* Move botões do Plotly para o topo */
         .modebar-container { top: 0 !important; bottom: auto !important; }
-        .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+        /* Estilização das abas */
+        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
         .stTabs [data-baseweb="tab"] { 
-            background-color: #1e1e1e; 
-            border-radius: 4px 4px 0 0; 
-            padding: 5px 15px;
+            background-color: #1e1e1e; border-radius: 4px; padding: 4px 12px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -102,11 +102,10 @@ if not st.session_state.auth_ok:
         if st.button("Acessar Sistema", use_container_width=True):
             if email in [ADMIN_EMAIL, OPERACIONAL_EMAIL]: 
                 st.session_state.auth_ok = True; st.session_state.user_email = email; st.rerun()
-            else: st.error("E-mail não autorizado.")
     st.stop()
 
 # ===============================
-# CABEÇALHO (RELOGIO NA DIREITA)
+# CABEÇALHO COMPACTO
 # ===============================
 st.markdown(f"""
     <div style="background-color: #1E1E1E; padding: 10px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
@@ -144,15 +143,8 @@ def plotar_gantt(lista_maquinas, height_grafico=500):
                 color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
             )
             
-            # 1. LINHAS HORIZONTAIS DISCRETAS (CONFORME MARCAÇÃO)
-            fig.update_yaxes(
-                autorange="reversed", title="", 
-                showgrid=True, gridcolor='rgba(255,255,255,0.15)', # Linha horizontal
-                tickfont=dict(size=11),
-                zeroline=False
-            )
-            
-            # 2. BARRAS MAIS JUNTAS (GAP MÍNIMO)
+            # Linhas Horizontais sólidas e Barras "Coladas"
+            fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)
             fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
 
             fig.update_xaxes(
@@ -163,28 +155,23 @@ def plotar_gantt(lista_maquinas, height_grafico=500):
             
             fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
             
-            # 3. RELÓGIO "AGORA" EXATAMENTE ABAIXO DAS DATAS
+            # Relógio "AGORA" no Rodapé
             fig.add_annotation(
                 x=agora, y=-0.18, text=f"AGORA: {agora.strftime('%H:%M')}", 
                 showarrow=False, xref="x", yref="paper", 
-                font=dict(color="red", size=14, family="Arial Black"),
+                font=dict(color="red", size=13, family="Arial Black"),
                 bgcolor="rgba(0,0,0,0.9)", bordercolor="red", borderpad=2
             )
             
             fig.update_layout(
-                height=height_grafico, 
-                margin=dict(l=10, r=10, t=50, b=100), # Margem superior para botões, inferior para o relógio
-                plot_bgcolor='rgba(0,0,0,0)', 
-                paper_bgcolor='rgba(0,0,0,0)',
-                bargap=0.01, # Coloca as máquinas uma encostada na outra
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                modebar=dict(orientation='h', bgcolor='rgba(0,0,0,0)') # Estilo da barra de ferramentas
+                height=height_grafico, margin=dict(l=10, r=10, t=50, b=100),
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                bargap=0.01, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             
-            # 4. BOTÕES DE ZOOM E TOOLS NO TOPO (VIA CONFIG)
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
 
-            # INDICADORES ABAIXO DO GRÁFICO
+            # Indicadores
             st.markdown("---")
             atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
             maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
@@ -195,13 +182,11 @@ def plotar_gantt(lista_maquinas, height_grafico=500):
             c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
             if ociosas:
                 c3.warning(f"{len(ociosas)} máquinas livres")
-                with st.expander("Ver máquinas ociosas"):
-                    st.write(", ".join(ociosas))
             else:
-                c3.success("✅ Setor 100% Ocupado")
+                c3.success("✅ Setor Ocupado")
 
-with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=450)
-with aba6: plotar_gantt(MAQUINAS_SOPRO, height_grafico=1100)
+with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, 450)
+with aba6: plotar_gantt(MAQUINAS_SOPRO, 1100)
 
 with aba1:
     with st.container(border=True):
@@ -233,18 +218,30 @@ with aba1:
                 st.rerun()
 
 with aba3:
-    st.subheader("⚙️ Gerenciar OPs")
+    st.subheader("⚙️ Painel de Ajuste Rápido (Reprogramar)")
     df_ger = carregar_dados()
     if not df_ger.empty:
-        for _, prod in df_ger[df_ger["status"] == "Pendente"].sort_values("inicio").iterrows():
-            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']}"):
-                col_a, col_b = st.columns([4, 1])
-                col_a.write(f"Início: {prod['inicio'].strftime('%d/%m %H:%M')} | Qtd: {int(prod['qtd'])}")
-                if col_b.button("✅ Ok", key=f"ok_{prod['id']}"):
-                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
+        is_admin = st.session_state.user_email == ADMIN_EMAIL
+        for _, prod in df_ger[df_ger["status"].isin(["Pendente", "Setup"])].sort_values("inicio").iterrows():
+            with st.expander(f"📌 {prod['maquina']} | {prod['pedido']}"):
+                col1, col2, col3 = st.columns([2, 2, 1])
+                if is_admin:
+                    n_data = col1.date_input("Nova Data", prod['inicio'].date(), key=f"d_{prod['id']}")
+                    n_hora = col2.time_input("Nova Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
+                    if st.button("💾 Salvar Alteração", key=f"s_{prod['id']}"):
+                        n_inicio = datetime.combine(n_data, n_hora)
+                        n_fim = n_inicio + (prod['fim'] - prod['inicio'])
+                        with conectar() as c:
+                            c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", 
+                                     (n_inicio.strftime('%Y-%m-%d %H:%M:%S'), n_fim.strftime('%Y-%m-%d %H:%M:%S'), prod['id']))
+                            c.commit()
+                        st.rerun()
+                
+                if col3.button("✅ Concluir", key=f"ok_{prod['id']}"):
+                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (prod['id'],)); c.commit()
                     st.rerun()
-                if col_b.button("🗑️ Sair", key=f"del_{prod['id']}"):
-                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
+                if col3.button("🗑️ Excluir", key=f"del_{prod['id']}"):
+                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=?", (prod['id'],)); c.commit()
                     st.rerun()
 
 with aba4: st.dataframe(df_produtos, use_container_width=True)
@@ -257,4 +254,4 @@ with aba5:
         st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
 
 st.divider()
-st.caption(f"v4.2 | Refresh 2min | {agora.strftime('%H:%M:%S')}")
+st.caption(f"v4.5 | Refresh 2min | {agora.strftime('%H:%M:%S')}")

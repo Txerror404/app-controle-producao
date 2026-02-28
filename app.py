@@ -197,6 +197,9 @@ with aba1:
                 st.session_state['item_auto'] = item_auto
                 st.session_state['cliente_auto'] = cliente_auto
                 st.session_state['codigo_auto'] = codigo_selecionado
+                
+                # Mostrar confirmação do produto selecionado
+                st.success(f"✅ Produto selecionado: **{item_auto}**")
             else:
                 # Se não selecionou nada, limpar o session state
                 st.session_state['item_auto'] = ""
@@ -216,39 +219,37 @@ with aba1:
     cliente_padrao = st.session_state.get('cliente_auto', "")
     codigo_padrao = st.session_state.get('codigo_auto', "")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         ped_in = st.text_input("Número do Pedido", placeholder="Ex: 5050", key="pedido_num")
         
-        # Mostrar o código do produto selecionado (readonly)
-        if codigo_padrao:
-            st.text_input("Código do Produto", value=codigo_padrao, disabled=True, key="codigo_readonly")
-        else:
-            st.text_input("Código do Produto", value="", disabled=True, key="codigo_readonly")
-            
-        item_in = st.text_input("Descrição do Item", value=item_padrao, key="item_desc")
+        # Cliente vinculado (agora na coluna 1)
+        cliente_in = st.text_input("Cliente Vinculado", value=cliente_padrao, key="cliente_nome")
         
     with col2:
-        cliente_in = st.text_input("Cliente Vinculado", value=cliente_padrao, key="cliente_nome")
         qtd = st.number_input("Quantidade", min_value=1, value=2380, key="qtd_prod")
-        
-    with col3:
         setup_in = st.number_input("Tempo de Setup (min)", min_value=0, value=30, key="setup_tempo")
+    
+    col_data1, col_data2 = st.columns(2)
+    with col_data1:
         dt_in = st.date_input("Data de Início", sugestao.date(), key="data_inicio")
+    with col_data2:
         hr_in = st.time_input("Hora de Início", sugestao.time(), key="hora_inicio")
 
-    if st.button("🚀 Lançar Produção + Setup", key="btn_lancar"):
-        if ped_in and item_in:
+    # Mostrar resumo do pedido antes de lançar
+    if codigo_padrao and item_padrao:
+        st.info(f"📦 **Produto:** {codigo_padrao} - {item_padrao}")
+
+    if st.button("🚀 Lançar Produção + Setup", key="btn_lancar", type="primary"):
+        # Verificar se tem pedido número e se um produto foi selecionado
+        if ped_in and codigo_padrao and item_padrao:
             ini_dt = datetime.combine(dt_in, hr_in)
             f_prod = ini_dt + timedelta(hours=qtd/CADENCIA)
             
-            # Identificador inclui Cliente e Código para facilitar no Gantt
-            if codigo_padrao:
-                identificador_pedido = f"{cliente_in} | {codigo_padrao} | Ped: {ped_in}"
-            else:
-                identificador_pedido = f"{cliente_in} | Ped: {ped_in}"
+            # Identificador inclui Cliente e Código
+            identificador_pedido = f"{cliente_padrao} | {codigo_padrao} | Ped: {ped_in}"
             
-            salvar_pedido_com_setup(maq_sel, identificador_pedido, item_in, ini_dt, f_prod, setup_in)
+            salvar_pedido_com_setup(maq_sel, identificador_pedido, item_padrao, ini_dt, f_prod, setup_in)
             st.success("✅ Produção agendada com sucesso!")
             
             # Limpar seleção de produto após lançar
@@ -257,7 +258,10 @@ with aba1:
                     del st.session_state[key]
             st.rerun()
         else:
-            st.error("❌ Preencha o número do pedido e a descrição do item!")
+            if not ped_in:
+                st.error("❌ Preencha o número do pedido!")
+            elif not codigo_padrao:
+                st.error("❌ Selecione um produto da lista!")
 
 # ===============================
 # ABA 2 - GANTT

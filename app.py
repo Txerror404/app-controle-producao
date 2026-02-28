@@ -154,4 +154,61 @@ with aba1:
     with st.form("form_p"):
         c1, c2 = st.columns(2)
         ped_n = c1.text_input("Nº Pedido")
-        cli_n = c
+        cli_n = c1.text_input("Cliente", value=cli_a)
+        qtd_n = c2.number_input("Quantidade", value=2380)
+        set_n = c2.number_input("Setup (min)", value=30)
+        c3, c4 = st.columns(2)
+        dat_n = c3.date_input("Data", sugestao.date()); hor_n = c4.time_input("Hora", sugestao.time())
+        if st.form_submit_button("Confirmar Lançamento"):
+            if ped_n and p_sel:
+                ini = datetime.combine(dat_n, hor_n)
+                fim = ini + timedelta(hours=qtd_n/CADENCIA)
+                with conectar() as conn:
+                    label = f"{cli_n} | {ped_n}"
+                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                                (maq_s, label, item_a, ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
+                    if set_n > 0:
+                        fim_s = fim + timedelta(minutes=set_n)
+                        conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                                    (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), fim_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
+                st.success("Salvo!"); st.rerun()
+
+# --- ABA 3: GERENCIAR ---
+with aba3:
+    df_ger = carregar_dados()
+    t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])
+    with t_p:
+        if not df_ger.empty:
+            df_ab = df_ger[df_ger["status"] != "Concluído"].sort_values("inicio")
+            for _, r in df_ab.iterrows():
+                with st.expander(f"{r['maquina']} | {r['pedido']}"):
+                    col_info, col_edit = st.columns(2)
+                    with col_info:
+                        st.write(f"**Qtd:** {r['qtd']}")
+                        if st.button("✅ CONCLUIR", key=f"c{r['id']}"):
+                            with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
+                            st.rerun()
+                        if st.button("🗑️ EXCLUIR", key=f"d{r['id']}"):
+                            with conectar() as c: c.execute("DELETE FROM agenda WHERE id=?", (r['id'],))
+                            st.rerun()
+                    with col_edit:
+                        nd = st.date_input("Nova Data", r['inicio'].date(), key=f"dt{r['id']}")
+                        nh = st.time_input("Nova Hora", r['inicio'].time(), key=f"hr{r['id']}")
+                        if st.button("💾 Atualizar", key=f"up{r['id']}"):
+                            ni = datetime.combine(nd, nh)
+                            nf = ni + (r['fim'] - r['inicio'])
+                            with conectar() as c: c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (ni.strftime('%Y-%m-%d %H:%M:%S'), nf.strftime('%Y-%m-%d %H:%M:%S'), r['id']))
+                            st.rerun()
+    with t_c:
+        if not df_ger.empty:
+            df_con = df_ger[df_ger["status"] == "Concluído"].sort_values("fim", ascending=False)
+            st.dataframe(df_con, use_container_width=True)
+
+# --- ABA 4: CATÁLOGO ---
+with aba4:
+    with st.form("f_prod"):
+        c1, c2, c3 = st.columns(3); cod = c1.text_input("Código"); des = c2.text_input("Descrição"); cli = c3.text_input("Cliente")
+        if st.form_submit_button("Salvar"):
+            with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (cod, des, cli))
+            st.rerun()
+    st.dataframe(carregar_produtos(), use_container_width=True)

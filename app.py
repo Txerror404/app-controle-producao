@@ -85,7 +85,7 @@ def proximo_horario(maq):
     return agora
 
 # ===============================
-# 4. SIDEBAR (RELÓGIO RESTAURADO)
+# 4. SIDEBAR (RELÓGIO FIXO)
 # ===============================
 with st.sidebar:
     st.title(f"👤 {'ADMIN' if is_admin else 'OPERADOR'}")
@@ -107,7 +107,7 @@ with st.sidebar:
 # ===============================
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançamentos", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Dashboard"])
 
-# --- ABA 1: LANÇAMENTOS (PEDIDO + SETUP AVULSO) ---
+# --- ABA 1: LANÇAMENTOS ---
 with aba1:
     col_a, col_b = st.columns(2)
     with col_a:
@@ -138,26 +138,23 @@ with aba1:
                             f_s = fim + timedelta(minutes=set_n)
                             conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
                                         (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, pedido_id))
-                    st.success("Lançado com Sucesso!"); st.rerun()
-
+                    st.success("Lançado!"); st.rerun()
     with col_b:
-        st.subheader("Setup Avulso / Manutenção")
+        st.subheader("Setup Avulso")
         with st.form("form_avulso_novo"):
-            maq_av = st.selectbox("Máquina ", MAQUINAS)
-            desc_av = st.text_input("Motivo (Ex: Limpeza)")
-            dur_av = st.number_input("Duração (minutos)", value=60)
+            maq_av = st.selectbox("Máquina ", MAQUINAS); desc_av = st.text_input("Motivo"); dur_av = st.number_input("Duração (min)", value=60)
             sug_av = proximo_horario(maq_av)
             c3, c4 = st.columns(2)
-            d_av = c3.date_input("Data", sug_av.date(), key="input_date_avulso")
-            h_av = c4.time_input("Hora", sug_av.time(), key="input_time_avulso")
-            if st.form_submit_button("Lançar Setup Avulso"):
+            d_av = c3.date_input("Data ", sug_av.date(), key="input_date_avulso")
+            h_av = c4.time_input("Hora ", sug_av.time(), key="input_time_avulso")
+            if st.form_submit_button("Lançar Setup"):
                 i_av = datetime.combine(d_av, h_av); f_av = i_av + timedelta(minutes=dur_av)
                 with conectar() as conn:
                     conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
                                 (maq_av, "SETUP", desc_av, i_av.strftime('%Y-%m-%d %H:%M:%S'), f_av.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
-                st.success("Setup Avulso Salvo!"); st.rerun()
+                st.rerun()
 
-# --- ABA 2: GANTT (RESTURADO CORES E TOOLTIPS) ---
+# --- ABA 2: GANTT (COM RELÓGIO NA LINHA VERMELHA RESTAURADO) ---
 with aba2:
     st.subheader("Cronograma Real-Time")
     df_g = carregar_dados()
@@ -172,23 +169,26 @@ with aba2:
             custom_data=["pedido", "inicio_format", "fim_format", "item", "qtd"],
             color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
-        fig.update_traces(
-            textposition='inside', insidetextanchor='start',
-            hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Item: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>"
-        )
+        
+        # RESTAURAÇÃO: Relógio na Linha Vermelha
+        fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2, 
+                      annotation_text=f"AGORA: {agora.strftime('%H:%M')}", 
+                      annotation_position="top left", annotation_font_color="red")
+        
+        fig.update_traces(textposition='inside', insidetextanchor='start',
+                         hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Item: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>")
         fig.update_yaxes(autorange="reversed")
-        fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
         st.plotly_chart(fig, use_container_width=True)
 
-    # Cards de Status Restaurados
+    # Cards de Status
     cols_status = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
-        if df_m.empty: cols_status[i].warning(f"⚠️ {m.upper()}\n\nSem Carga")
-        elif not df_m[df_m["fim"] < agora].empty: cols_status[i].error(f"🚨 {m.upper()}\n\nEM ATRASO")
+        if df_m.empty: cols_status[i].warning(f"⚠️ {m.upper()}\n\nLivre")
+        elif not df_m[df_m["fim"] < agora].empty: cols_status[i].error(f"🚨 {m.upper()}\n\nATRASO")
         else: cols_status[i].success(f"✅ {m.upper()}\n\nEm Dia")
 
-# --- ABA 3: GERENCIAR (CONGELADA E CORRIGIDA) ---
+# --- ABA 3: GERENCIAR (CONGELADA) ---
 with aba3:
     df_ger = carregar_dados()
     t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])
@@ -226,7 +226,7 @@ with aba3:
 # --- ABA 4: CATÁLOGO (CONGELADA) ---
 with aba4:
     if is_admin:
-        with st.form("form_prod_catalogo"):
+        with st.form("form_prod_cat"):
             c1, c2, c3 = st.columns(3); co = c1.text_input("Código"); de = c2.text_input("Descrição"); cl = c3.text_input("Cliente")
             if st.form_submit_button("Salvar Produto"):
                 with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (co, de, cl)); st.rerun()
@@ -234,7 +234,7 @@ with aba4:
 
 # --- ABA 5: DASHBOARD ---
 with aba5:
-    st.subheader("Ocupação de Máquinas")
+    st.subheader("Carga de Máquinas")
     df_dash = carregar_dados()
     if not df_dash.empty:
         df_aberto = df_dash[df_dash["status"] != "Concluído"]

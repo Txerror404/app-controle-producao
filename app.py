@@ -11,7 +11,6 @@ from streamlit_autorefresh import st_autorefresh
 # ===============================
 st.set_page_config(page_title="PCP Industrial", layout="wide")
 
-# ATUALIZAÇÃO AUTOMÁTICA (2 MINUTOS)
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
@@ -53,10 +52,9 @@ def carregar_produtos_google():
     try:
         df = pd.read_csv(GOOGLE_SHEETS_URL, sep=',', encoding='utf-8')
         df.columns = df.columns.str.strip()
-        if 'ID_ITEM' not in df.columns: return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
         df['id_item'] = df['ID_ITEM'].astype(str).str.strip()
         df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip() if 'DESCRIÇÃO_1' in df.columns else ''
-        df['cliente'] = df['CLIENTE'].astype(str).str.strip().apply(lambda x: x if x and x != 'nan' else 'N/A') if 'CLIENTE' in df.columns else 'N/A'
+        df['cliente'] = df['CLIENTE'].astype(str).str.strip() if 'CLIENTE' in df.columns else 'N/A'
         df['qtd_carga'] = pd.to_numeric(df['QTD/CARGA'].astype(str).str.replace(',', '.'), errors='coerce').fillna(CARGA_UNIDADE)
         return df.fillna('N/A')
     except: return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
@@ -93,12 +91,9 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # ===============================
-# CABEÇALHO COMPACTO
+# CABEÇALHO
 # ===============================
 st.markdown(f"""
-    <style>
-        .main .block-container {{ padding-top: 1rem; padding-bottom: 1rem; }}
-    </style>
     <div style="background-color: #1E1E1E; padding: 10px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h2 style="color: white; margin: 0; font-size: 20px; font-family: 'Segoe UI', sans-serif;">
@@ -118,9 +113,9 @@ st.markdown(f"""
 aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
 
 # ===============================
-# FUNÇÃO GANTT COM INDICADORES
+# FUNÇÃO GANTT OTIMIZADA
 # ===============================
-def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
+def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.9):
     df_all = carregar_dados()
     if not df_all.empty:
         df_g = df_all[df_all["maquina"].isin(lista_maquinas)].copy()
@@ -134,28 +129,39 @@ def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
                 color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
             )
             
+            # Eixo X e Linha Vertical
             fig.update_xaxes(
-                type='date', 
-                range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], 
-                dtick=10800000, tickformat="%d/%m\n%H:%M", 
-                gridcolor='rgba(255,255,255,0.1)', showgrid=True, 
-                tickfont=dict(size=10, color="white")
+                type='date', range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], 
+                dtick=10800000, tickformat="%H:%M\n%d/%m", 
+                gridcolor='rgba(255,255,255,0.05)', showgrid=True, tickfont=dict(size=10, color="white")
             )
-            fig.update_yaxes(autorange="reversed", title="")
+            
+            # Eixo Y com Linhas Horizontais (Grid) para separar máquinas
+            fig.update_yaxes(
+                autorange="reversed", title="", 
+                showgrid=True, gridcolor='rgba(255,255,255,0.1)', # Linha horizontal discreta
+                tickfont=dict(size=11)
+            )
+            
             fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
             
-            # Texto "AGORA" no eixo X
+            # Texto AGORA na base
             fig.add_annotation(
                 x=agora, y=-0.08, text=f"AGORA: {agora.strftime('%H:%M')}", 
                 showarrow=False, xref="x", yref="paper", 
-                font=dict(color="red", size=14, family="Arial Black"),
+                font=dict(color="red", size=13, family="Arial Black"),
                 bgcolor="rgba(0,0,0,0.8)"
             )
             
+            # Ajuste de Proximidade das Barras
             fig.update_traces(textposition='inside', insidetextanchor='start', width=espessura_barra)
+            
             fig.update_layout(
-                height=height_grafico, margin=dict(l=10, r=10, t=30, b=60), 
-                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                height=height_grafico, 
+                margin=dict(l=10, r=10, t=20, b=50), 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
+                bargap=0.05, # Espaço mínimo entre barras de máquinas diferentes
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -176,11 +182,8 @@ def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
             else:
                 c3.success("✅ Setor 100% Ocupado")
 
-with aba2: 
-    plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=450)
-
-with aba6: 
-    plotar_gantt(MAQUINAS_SOPRO, height_grafico=1100, espessura_barra=0.6)
+with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=400)
+with aba6: plotar_gantt(MAQUINAS_SOPRO, height_grafico=1000, espessura_barra=0.9)
 
 with aba1:
     with st.container(border=True):
@@ -236,4 +239,4 @@ with aba5:
         st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
 
 st.divider()
-st.caption(f"v3.9.5 | Refresh 2min | {agora.strftime('%H:%M:%S')}")
+st.caption(f"v3.9.8 | Refresh 2min | {agora.strftime('%H:%M:%S')}")

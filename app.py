@@ -67,10 +67,16 @@ def carregar_dados():
         df["inicio"] = pd.to_datetime(df["inicio"])
         df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
-        # Formatações para o Tooltip (Card)
-        df["hora_ini"] = df["inicio"].dt.strftime('%H:%M')
-        df["hora_fim"] = df["fim"].dt.strftime('%H:%M')
-        df["rotulo_grafico"] = df.apply(lambda r: "SETUP" if r['status'] == "Setup" else f"{r['pedido']} | {int(r['qtd'])}", axis=1)
+        
+        # Formatações para o Tooltip e Rótulo
+        df["h_ini"] = df["inicio"].dt.strftime('%H:%M')
+        df["h_fim"] = df["fim"].dt.strftime('%H:%M')
+        
+        # CORREÇÃO DO TEXTO DENTRO DA BARRA (Duas linhas)
+        df["rotulo_barra"] = df.apply(
+            lambda r: "SETUP" if r['status'] == "Setup" 
+            else f"{r['pedido']}<br>QUANT: {int(r['qtd'])}", axis=1
+        )
     return df
 
 def proximo_horario(maq):
@@ -146,7 +152,7 @@ with aba1:
                                 (maq_av, "SETUP", desc_av, i_av.strftime('%Y-%m-%d %H:%M:%S'), f_av.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
                 st.rerun()
 
-# --- ABA 2: GANTT (CORREÇÃO DO TOOLTIP/CARD) ---
+# --- ABA 2: GANTT (CORREÇÃO DO TEXTO NA BARRA E NO CARD) ---
 with aba2:
     st.subheader("Cronograma Real-Time")
     df_g = carregar_dados()
@@ -154,18 +160,19 @@ with aba2:
         df_g["status_cor"] = df_g["status"]
         df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
         
-        # Ajuste do Tooltip para mostrar os dados conforme sua imagem
+        # Gráfico com rótulo de duas linhas e custom_data para o Tooltip
         fig = px.timeline(
             df_g, x_start="inicio", x_end="fim", y="maquina", 
-            color="status_cor", text="rotulo_grafico",
+            color="status_cor", text="rotulo_barra",
             category_orders={"maquina": MAQUINAS},
-            custom_data=["pedido", "hora_ini", "hora_fim", "item", "qtd"],
+            custom_data=["pedido", "h_ini", "h_fim", "item", "qtd"],
             color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         
-        # Formatação do balão (Tooltip) idêntica ao seu desenho
+        # CORREÇÃO DO CARD (TOOLTIP) - Conforme imagem 'exemplo'
         fig.update_traces(
-            hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Cód: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>"
+            textposition='inside', insidetextanchor='start',
+            hovertemplate="<b>%{customdata[0]}</b><br>Início : %{customdata[1]}<br>Fim: %{customdata[2]}<br>Cód: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>"
         )
 
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
@@ -180,7 +187,7 @@ with aba2:
         elif not df_m[df_m["fim"] < agora].empty: cols_st[i].error(f"🚨 {m.upper()}\n\nATRASO")
         else: cols_st[i].success(f"✅ {m.upper()}\n\nEm Dia")
 
-# --- ABA 3: GERENCIAR (PRESERVADA COM EDIÇÃO DE QTD) ---
+# --- ABA 3: GERENCIAR (CONGELADA COM EDIÇÃO) ---
 with aba3:
     df_ger = carregar_dados()
     t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])

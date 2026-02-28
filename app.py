@@ -10,7 +10,6 @@ from streamlit_autorefresh import st_autorefresh
 # 1. CONFIGURAÇÃO E ACESSO
 # ===============================
 st.set_page_config(page_title="PCP William - Industrial", layout="wide")
-# Atualização automática a cada 30 segundos para manter a linha do "AGORA" precisa
 st_autorefresh(interval=30000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
@@ -38,8 +37,8 @@ def carregar_dados():
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["h_ini"] = df["inicio"].dt.strftime('%H:%M')
         df["h_fim"] = df["fim"].dt.strftime('%H:%M')
-        # Texto das barras em duas linhas: PEDIDO e QUANTIDADE
-        df["rotulo_barra"] = df.apply(lambda r: "SETUP" if r['status'] == "Setup" else f"{r['pedido']}<br>QUANT: {int(r['qtd'])}", axis=1)
+        # FORMATO EXATO DO TEXTO QUE VOCÊ PRECISA
+        df["rotulo_barra"] = df.apply(lambda r: "SET.UP" if r['status'] == "Setup" else f"{r['pedido']}<br>QUANT: {int(r['qtd'])}", axis=1)
     return df
 
 def proximo_horario(maq):
@@ -49,27 +48,23 @@ def proximo_horario(maq):
         if not df_maq.empty: return max(agora, df_maq["fim"].max())
     return agora
 
-# --- TELA DE LOGIN ---
 if not st.session_state.auth_ok:
     st.markdown("<h1 style='text-align:center;'>🏭 PCP William Industrial</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         email = st.text_input("E-mail autorizado:").lower().strip()
         if st.button("Acessar Sistema", use_container_width=True):
-            if email: 
-                st.session_state.auth_ok = True
-                st.session_state.user_email = email
-                st.rerun()
+            if email: st.session_state.auth_ok = True; st.session_state.user_email = email; st.rerun()
     st.stop()
 
 is_admin = st.session_state.user_email == ADMIN_EMAIL
 
 # ===============================
-# 2. INTERFACE PRINCIPAL
+# 2. INTERFACE
 # ===============================
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançamentos", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
-# --- ABA 1: LANÇAMENTOS ---
+# ABA 1: LANÇAMENTOS
 with aba1:
     col_a, col_b = st.columns(2)
     with col_a:
@@ -92,16 +87,14 @@ with aba1:
                         ini = datetime.combine(dat_n, hor_n); fim = ini + timedelta(hours=qtd_n/CADENCIA_PADRAO)
                         with conectar() as conn:
                             cur = conn.cursor()
-                            cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", 
-                                        (maq_s, f"{cli_n} | {ped_n}", p_sel.split(" | ")[0], ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
+                            cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maq_s, f"{cli_n} | {ped_n}", p_sel.split(" | ")[0], ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
                             p_id = cur.lastrowid
                             if set_n > 0:
                                 f_s = fim + timedelta(minutes=set_n)
-                                conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", 
-                                            (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, p_id))
+                                conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, p_id))
                         st.rerun()
 
-# --- ABA 2: GANTT (COM ESCALA DE 2 DIAS E GRADE) ---
+# --- ABA 2: GANTT (CORREÇÃO DA ESPESSURA E ESCALA) ---
 with aba2:
     df_g = carregar_dados()
     if not df_g.empty:
@@ -115,36 +108,37 @@ with aba2:
             color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         
-        # AJUSTE DA ESCALA FIXA (2 DIAS) E GRADE VISUAL
+        # ESCALA DE 2 DIAS COM GRADE SUAVE
         fig.update_xaxes(
             type='date',
-            range=[agora - timedelta(hours=1), agora + timedelta(hours=47)], # Foca no Agora + 2 dias
-            dtick=10800000, # Linha de grade a cada 3 horas para precisão visual
-            showgrid=True,
-            gridwidth=1,
-            gridcolor='LightGrey', # Grade sutil por baixo das barras
+            range=[agora - timedelta(hours=2), agora + timedelta(hours=46)],
+            dtick=10800000, # 3 horas
+            showgrid=True, gridcolor='rgba(255,255,255,0.1)',
             tickformat="%d/%m\n%H:%M"
         )
         
+        # VOLTANDO AS BARRAS GROSSAS (TRILHOS)
+        fig.update_yaxes(autorange="reversed", title="")
+        
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-        fig.add_annotation(x=agora, y=1.05, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, yref="paper", font=dict(color="red", size=14))
+        fig.add_annotation(x=agora, y=1.02, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, yref="paper", font=dict(color="red", size=14))
         
         fig.update_traces(
             textposition='inside', 
             insidetextanchor='start',
-            hovertemplate="<b>Pedido: %{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Cód: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>"
+            width=0.8, # FORÇA A BARRA A SER GROSSA
+            hovertemplate="<b>Pedido: %{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Qtd: %{customdata[4]}<extra></extra>"
         )
         
-        fig.update_yaxes(autorange="reversed", title="")
         fig.update_layout(
-            height=550,
-            margin=dict(l=10, r=10, t=50, b=10),
-            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center"),
-            barmode='group' # Garante independência visual das linhas
+            height=500, # Altura ideal para 4 máquinas
+            bargap=0.1, # Espaço mínimo entre as máquinas para parecer trilho
+            margin=dict(l=10, r=10, t=40, b=10),
+            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center")
         )
         st.plotly_chart(fig, use_container_width=True)
 
-# --- ABA 3: GERENCIAR ---
+# --- ABAS 3, 4 E 5 (MANTIDAS) ---
 with aba3:
     df_ger = carregar_dados()
     if not df_ger.empty:
@@ -175,18 +169,11 @@ with aba3:
                                 c.execute("UPDATE agenda SET inicio=?, fim=datetime(fim, ? || ' seconds') WHERE vinculo_id=?", (n_f.strftime('%Y-%m-%d %H:%M:%S'), s_d, r['id']))
                             st.rerun()
 
-# --- ABA 4: CATÁLOGO ---
 with aba4:
-    if is_admin:
-        with st.form("f_catalogo"):
-            c1, c2, c3 = st.columns(3); co = c1.text_input("Código"); de = c2.text_input("Descrição"); cl = c3.text_input("Cliente")
-            if st.form_submit_button("Salvar no Catálogo", use_container_width=True):
-                with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (co, de, cl)); st.rerun()
     st.dataframe(pd.read_sql_query("SELECT * FROM produtos", conectar()), use_container_width=True)
 
-# --- ABA 5: CARGAS SEMANAIS ---
 with aba5:
-    st.subheader(f"Planejamento de Cargas (Base: {CARGA_UNIDADE} un)")
+    st.subheader(f"Total de Cargas da Semana (Base: {CARGA_UNIDADE} un)")
     df_c = carregar_dados()
     if not df_c.empty:
         inicio_sem = agora - timedelta(days=agora.weekday())

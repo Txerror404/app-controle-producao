@@ -87,7 +87,7 @@ st.title("📊 PCP William - Sistema Integrado")
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Adicionar Pedido", "📊 Gantt de Produção", "⚙️ Gerenciar", "📦 Cadastro de Produtos"])
 
 # ===============================
-# ABA 4 - CADASTRO DE PRODUTOS (CORRIGIDA)
+# ABA 4 - CADASTRO DE PRODUTOS
 # ===============================
 with aba4:
     st.subheader("📦 Cadastrar Novo Produto")
@@ -113,7 +113,7 @@ with aba4:
                     conn.commit()
                     st.success("✅ Produto cadastrado com sucesso!")
                     
-                    # Limpar os campos usando session state
+                    # Limpar os campos
                     for key in ["novo_codigo", "nova_descricao", "novo_cliente"]:
                         if key in st.session_state:
                             del st.session_state[key]
@@ -144,7 +144,7 @@ with aba4:
         st.info("ℹ️ Nenhum produto cadastrado ainda.")
 
 # ===============================
-# ABA 1 - ADICIONAR PEDIDO
+# ABA 1 - ADICIONAR PEDIDO (CORRIGIDA)
 # ===============================
 with aba1:
     st.subheader("➕ Novo Pedido de Produção")
@@ -157,32 +157,83 @@ with aba1:
     
     with col_prod:
         if not df_prods.empty:
-            lista_codigos = [""] + df_prods['codigo'].tolist()
-            cod_sel = st.selectbox("Buscar Produto Cadastrado", lista_codigos, key="sel_produto")
+            # Criar lista de opções com formato mais amigável
+            opcoes_produto = []
+            for _, row in df_prods.iterrows():
+                cliente = row['cliente'] if pd.notna(row['cliente']) else "Sem cliente"
+                opcao = f"{row['codigo']} - {row['descricao']} ({cliente})"
+                opcoes_produto.append(opcao)
             
-            if cod_sel and cod_sel != "":
-                # Puxa descrição e cliente automaticamente
-                produto_info = df_prods[df_prods['codigo'] == cod_sel].iloc[0]
+            opcoes_com_blank = [""] + opcoes_produto
+            
+            # Verificar se já existe um produto selecionado no session state
+            indice_padrao = 0
+            if 'ultimo_produto_selecionado' in st.session_state:
+                ultimo = st.session_state['ultimo_produto_selecionado']
+                if ultimo in opcoes_com_blank:
+                    indice_padrao = opcoes_com_blank.index(ultimo)
+            
+            produto_selecionado = st.selectbox(
+                "Buscar Produto Cadastrado", 
+                opcoes_com_blank, 
+                index=indice_padrao,
+                key="sel_produto_completo"
+            )
+            
+            # Se selecionou um produto, extrair as informações
+            if produto_selecionado and produto_selecionado != "":
+                # Salvar no session state
+                st.session_state['ultimo_produto_selecionado'] = produto_selecionado
+                
+                # Extrair o código (parte antes do " - ")
+                codigo_selecionado = produto_selecionado.split(" - ")[0]
+                
+                # Buscar as informações completas do produto
+                produto_info = df_prods[df_prods['codigo'] == codigo_selecionado].iloc[0]
                 item_auto = produto_info['descricao']
                 cliente_auto = produto_info['cliente'] if pd.notna(produto_info['cliente']) else ""
+                
+                # Salvar no session state para persistir
+                st.session_state['item_auto'] = item_auto
+                st.session_state['cliente_auto'] = cliente_auto
+                st.session_state['codigo_auto'] = codigo_selecionado
             else:
-                item_auto = ""
-                cliente_auto = ""
+                # Se não selecionou nada, limpar o session state
+                st.session_state['item_auto'] = ""
+                st.session_state['cliente_auto'] = ""
+                st.session_state['codigo_auto'] = ""
+                if 'ultimo_produto_selecionado' in st.session_state:
+                    del st.session_state['ultimo_produto_selecionado']
         else:
             st.warning("⚠️ Nenhum produto cadastrado. Cadastre produtos na aba 'Cadastro de Produtos'.")
-            item_auto = ""
-            cliente_auto = ""
-            cod_sel = ""
+            # Inicializar session state vazio
+            st.session_state['item_auto'] = ""
+            st.session_state['cliente_auto'] = ""
+            st.session_state['codigo_auto'] = ""
+
+    # Recuperar valores do session state (se existirem)
+    item_padrao = st.session_state.get('item_auto', "")
+    cliente_padrao = st.session_state.get('cliente_auto', "")
+    codigo_padrao = st.session_state.get('codigo_auto', "")
 
     col1, col2, col3 = st.columns(3)
     with col1:
         ped_in = st.text_input("Número do Pedido", placeholder="Ex: 5050", key="pedido_num")
-        item_in = st.text_input("Descrição do Item", value=item_auto, key="item_desc")
-        cliente_in = st.text_input("Cliente Vinculado", value=cliente_auto, key="cliente_nome")
+        
+        # Mostrar o código do produto selecionado (readonly)
+        if codigo_padrao:
+            st.text_input("Código do Produto", value=codigo_padrao, disabled=True, key="codigo_readonly")
+        else:
+            st.text_input("Código do Produto", value="", disabled=True, key="codigo_readonly")
+            
+        item_in = st.text_input("Descrição do Item", value=item_padrao, key="item_desc")
+        
     with col2:
+        cliente_in = st.text_input("Cliente Vinculado", value=cliente_padrao, key="cliente_nome")
         qtd = st.number_input("Quantidade", min_value=1, value=2380, key="qtd_prod")
-        setup_in = st.number_input("Tempo de Setup (min)", min_value=0, value=30, key="setup_tempo")
+        
     with col3:
+        setup_in = st.number_input("Tempo de Setup (min)", min_value=0, value=30, key="setup_tempo")
         dt_in = st.date_input("Data de Início", sugestao.date(), key="data_inicio")
         hr_in = st.time_input("Hora de Início", sugestao.time(), key="hora_inicio")
 
@@ -192,10 +243,18 @@ with aba1:
             f_prod = ini_dt + timedelta(hours=qtd/CADENCIA)
             
             # Identificador inclui Cliente e Código para facilitar no Gantt
-            identificador_pedido = f"{cliente_in} | {cod_sel} | Ped: {ped_in}"
+            if codigo_padrao:
+                identificador_pedido = f"{cliente_in} | {codigo_padrao} | Ped: {ped_in}"
+            else:
+                identificador_pedido = f"{cliente_in} | Ped: {ped_in}"
             
             salvar_pedido_com_setup(maq_sel, identificador_pedido, item_in, ini_dt, f_prod, setup_in)
             st.success("✅ Produção agendada com sucesso!")
+            
+            # Limpar seleção de produto após lançar
+            for key in ['sel_produto_completo', 'item_auto', 'cliente_auto', 'codigo_auto', 'ultimo_produto_selecionado']:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.rerun()
         else:
             st.error("❌ Preencha o número do pedido e a descrição do item!")

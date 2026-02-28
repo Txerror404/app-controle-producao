@@ -68,7 +68,11 @@ def carregar_dados():
         df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         
-        # LÓGICA DE RÓTULO: Se for Setup, escreve apenas SETUP. Senão, mostra Pedido + Qtd.
+        # Formatação de Datas para o Tooltip (ex: 28/02 09:15)
+        df["inicio_format"] = df["inicio"].dt.strftime('%d/%m %H:%M')
+        df["fim_format"] = df["fim"].dt.strftime('%d/%m %H:%M')
+        
+        # Rótulo da Barra
         df["rotulo_grafico"] = df.apply(
             lambda r: "SETUP" if r['status'] == "Setup" 
             else f"{r['pedido']} | Qtd: {int(r['qtd'])}", 
@@ -93,16 +97,9 @@ def proximo_horario(maq):
 # ===============================
 st.title("🏭 Gestão de Produção Industrial")
 
-with st.sidebar:
-    st.title("👤 Usuário")
-    st.write(f"🕒 {agora.strftime('%H:%M:%S')}")
-    if st.button("Sair"):
-        st.session_state.auth_ok = False
-        st.rerun()
-
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Novo Pedido", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo"])
 
-# --- ABA 2: GANTT ---
+# --- ABA 2: GANTT (TOOLTIP PERSONALIZADO) ---
 with aba2:
     st.subheader("Cronograma de Máquinas")
     df_g = carregar_dados()
@@ -110,17 +107,28 @@ with aba2:
         df_g["status_cor"] = df_g["status"]
         df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
         
+        # Adicionamos custom_data para alimentar o Tooltip
         fig = px.timeline(
             df_g, x_start="inicio", x_end="fim", y="maquina", 
             color="status_cor", text="rotulo_grafico",
             category_orders={"maquina": MAQUINAS},
+            custom_data=["pedido", "inicio_format", "fim_format", "item", "qtd"],
             color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         
+        # AJUSTE DO TOOLTIP (HOVER) CONFORME SUA IMAGEM
         fig.update_traces(
             textposition='inside', 
             insidetextanchor='start',
-            textfont=dict(size=12, color="white")
+            textfont=dict(size=12, color="white"),
+            hovertemplate="<br>".join([
+                "<b>%{customdata[0]}</b>",
+                "Início: %{customdata[1]}",
+                "Fim: %{customdata[2]}",
+                "Cód: %{customdata[3]}",
+                "Qtd: %{customdata[4]}",
+                "<extra></extra>" # Remove a caixa lateral com o nome do status
+            ])
         )
         
         fig.update_yaxes(autorange="reversed")
@@ -129,6 +137,7 @@ with aba2:
         st.plotly_chart(fig, use_container_width=True)
     
     # Cards de Status
+    st.markdown("---")
     cols = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
@@ -148,7 +157,7 @@ with aba1:
         if not df_p.empty:
             lista_p = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
             p_sel = st.selectbox("Produto", [""] + lista_p)
-            item_a = p_sel.split(" | ")[1] if p_sel else ""; cli_a = df_p[df_p['codigo'] == p_sel.split(" | ")[0]]['cliente'].values[0] if p_sel else ""
+            item_a = p_sel.split(" | ")[0] if p_sel else ""; cli_a = df_p[df_p['codigo'] == item_a]['cliente'].values[0] if p_sel else ""
         else: st.error("Cadastre produtos no Catálogo."); item_a, cli_a = "", ""
 
     with st.form("form_p"):
@@ -184,6 +193,7 @@ with aba3:
                 with st.expander(f"{r['maquina']} | {r['pedido']}"):
                     col_info, col_edit = st.columns(2)
                     with col_info:
+                        st.write(f"**Cód Item:** {r['item']}")
                         st.write(f"**Qtd:** {r['qtd']}")
                         if st.button("✅ CONCLUIR", key=f"c{r['id']}"):
                             with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))

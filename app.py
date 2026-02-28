@@ -7,7 +7,7 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 
 # ===============================
-# 1. CONFIGURAÇÃO E ACESSO (CONGELADO)
+# 1. CONFIGURAÇÃO E ACESSO
 # ===============================
 st.set_page_config(page_title="PCP Industrial", layout="wide")
 st_autorefresh(interval=30000, key="pcp_refresh_global")
@@ -92,9 +92,6 @@ st.markdown(f"""
 
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
-# ============================================================
-# ABA 2 - GANTT (ÚNICA PARTE MODIFICADA: GRADE 3H / DATA 9H)
-# ============================================================
 with aba2:
     df_g = carregar_dados()
     if not df_g.empty:
@@ -111,48 +108,23 @@ with aba2:
         fig.update_xaxes(
             type='date',
             range=[agora - timedelta(hours=2), agora + timedelta(hours=48)],
-            dtick=10800000, # Linhas de grade e ticks de 3 em 3 horas (10.800.000 ms)
+            dtick=10800000, 
             tickformatstops=[
-                # Quando o espaço for de 9h (32.400.000 ms) ou mais, mostra DATA e HORA
                 dict(dtickrange=[32400000, None], value="%d/%m\n%H:%M"),
-                # Para o intervalo de 3h, mostra apenas a HORA
                 dict(dtickrange=[None, 32399999], value="%H:%M")
             ],
             gridcolor='rgba(255,255,255,0.1)',
-            showgrid=True,
-            tickangle=0
+            showgrid=True
         )
         
         fig.update_yaxes(autorange="reversed", title="")
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-        
-        fig.add_annotation(
-            x=agora, y=1.08, 
-            text=f"🔴 AGORA: {agora.strftime('%d/%m %H:%M')}", 
-            showarrow=False, yref="paper", 
-            font=dict(color="#FF4B4B", size=14, family="Arial Black"),
-            bgcolor="rgba(0,0,0,0.7)", bordercolor="#FF4B4B", borderwidth=1, borderpad=4
-        )
-        
-        fig.update_traces(
-            textposition='inside', insidetextanchor='start',
-            width=0.85, 
-            hovertemplate="<b>OP: %{customdata[0]}</b><br>Produto: %{customdata[2]}<br>Qtd: %{customdata[1]}<extra></extra>"
-        )
-        
-        fig.update_layout(
-            height=550, bargap=0.1, margin=dict(l=10, r=10, t=90, b=10),
-            legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center"),
-            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
-        )
+        fig.update_traces(textposition='inside', insidetextanchor='start', width=0.85)
+        fig.update_layout(height=550, margin=dict(l=10, r=10, t=90, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("📅 Régua: Grade visual a cada 3h | Datas exibidas prioritariamente a cada 9h")
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
-# ============================================================
-# DEMAIS ABAS (CONGELADAS CONFORME SEU CÓDIGO ORIGINAL)
-# ============================================================
 with aba1:
     with st.container(border=True):
         st.subheader("➕ Lançar Nova Ordem de Produção")
@@ -197,9 +169,15 @@ with aba3:
     if not df_ger.empty:
         producoes = df_ger[df_ger["status"] == "Pendente"].sort_values("inicio")
         for _, prod in producoes.iterrows():
-            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']}"):
+            setup = df_ger[(df_ger["vinculo_id"] == prod["id"]) & (df_ger["status"] == "Setup")]
+            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
                 col_a, col_b, col_c = st.columns([3, 1, 1])
-                with col_a: st.write(f"**Qtd:** {int(prod['qtd'])} | **Fim:** {prod['fim'].strftime('%H:%M')}")
+                with col_a:
+                    st.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')}")
+                    st.write(f"**Quantidade:** {int(prod['qtd'])} unidades")
+                    if not setup.empty:
+                        s = setup.iloc[0]
+                        st.write(f"🔧 **Setup:** {s['inicio'].strftime('%H:%M')} às {s['fim'].strftime('%H:%M')}")
                 if col_b.button("✅ Concluir", key=f"conc_{prod['id']}"):
                     with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); st.rerun()
                 if col_c.button("🗑️ Apagar", key=f"del_{prod['id']}"):
@@ -207,11 +185,29 @@ with aba3:
 
 with aba4:
     st.subheader("📦 Catálogo de Produtos")
+    with st.expander("➕ Cadastrar Novo Produto", expanded=True):
+        col_c1, col_c2, col_c3 = st.columns(3)
+        novo_cod = col_c1.text_input("Código do Produto", key="novo_cod")
+        nova_desc = col_c2.text_input("Descrição", key="nova_desc")
+        novo_cli = col_c3.text_input("Cliente", key="novo_cli")
+        if st.button("✅ Cadastrar Produto", key="btn_cad_prod"):
+            if novo_cod and nova_desc:
+                with conectar() as conn:
+                    try:
+                        conn.execute("INSERT INTO produtos (codigo, descricao, cliente) VALUES (?, ?, ?)", (novo_cod, nova_desc, novo_cli))
+                        st.success(f"✅ Produto {novo_cod} cadastrado!"); st.rerun()
+                    except sqlite3.IntegrityError: st.error("❌ Código já existe!")
     df_prod = pd.read_sql_query("SELECT * FROM produtos ORDER BY codigo", conectar())
-    st.dataframe(df_prod, use_container_width=True)
+    if not df_prod.empty:
+        st.dataframe(df_prod, use_container_width=True)
+        with st.expander("🗑️ Excluir Produto"):
+            prod_del = st.selectbox("Selecionar produto", df_prod['codigo'].tolist())
+            if st.button("Excluir", type="secondary"):
+                with conectar() as c: c.execute("DELETE FROM produtos WHERE codigo=?", (prod_del,))
+                st.rerun()
 
 with aba5:
-    st.subheader(f"📈 Cargas por Máquina")
+    st.subheader(f"📈 Cargas por Máquina (Base: {CARGA_UNIDADE} unid/carga)")
     df_c = carregar_dados()
     if not df_c.empty:
         df_prod_c = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
@@ -219,6 +215,13 @@ with aba5:
         for i, maq in enumerate(MAQUINAS):
             total_qtd = df_prod_c[df_prod_c["maquina"] == maq]["qtd"].sum()
             cols[i].metric(label=f"🏭 {maq.upper()}", value=f"{total_qtd / CARGA_UNIDADE:.1f} cargas", delta=f"{int(total_qtd)} unid")
+        with st.expander("📋 Detalhamento por OP"):
+            for maq in MAQUINAS:
+                st.write(f"**{maq}**")
+                df_maq = df_prod_c[df_prod_c["maquina"] == maq]
+                if not df_maq.empty:
+                    for _, row in df_maq.iterrows(): st.write(f"  • {row['pedido']}: {int(row['qtd'])} unid")
+                else: st.write("  • Nenhuma OP")
 
 st.divider()
-st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
+st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')} | PCP Industrial v2.0")

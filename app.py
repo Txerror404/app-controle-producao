@@ -68,16 +68,7 @@ def carregar_produtos_google():
         if 'DESCRIÇÃO_1' in df.columns:
             df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip()
         else:
-            # Fallback para qualquer coluna de descrição
-            desc_col = None
-            for col in df.columns:
-                if 'DESCRIÇÃO' in col.upper() or 'DESCRICAO' in col.upper():
-                    desc_col = col
-                    break
-            if desc_col:
-                df['descricao'] = df[desc_col].astype(str).str.strip()
-            else:
-                df['descricao'] = ''
+            df['descricao'] = ''
         
         # Cliente
         if 'CLIENTE' in df.columns:
@@ -103,6 +94,15 @@ def carregar_produtos_google():
     except Exception as e:
         st.error(f"❌ Erro ao carregar planilha: {e}")
         return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
+
+# ===============================
+# CARREGAR PRODUTOS UMA ÚNICA VEZ NO SESSION STATE
+# ===============================
+if 'df_produtos' not in st.session_state:
+    with st.spinner("Carregando produtos da planilha..."):
+        st.session_state.df_produtos = carregar_produtos_google()
+
+df_produtos = st.session_state.df_produtos
 
 def carregar_dados():
     with conectar() as c:
@@ -208,15 +208,11 @@ with aba2:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP (CORRIGIDA)
+# ABA 1 - LANÇAR OP (USANDO SESSION STATE)
 # ===============================
 with aba1:
     with st.container(border=True):
         st.subheader("➕ Lançar Nova Ordem de Produção")
-        
-        # Carregar produtos do Google Sheets
-        with st.spinner("Carregando produtos da planilha..."):
-            df_produtos = carregar_produtos_google()
         
         col1, col2 = st.columns(2)
         with col1:
@@ -360,15 +356,12 @@ with aba3:
 with aba4:
     st.subheader("📋 Produtos - Fonte: Google Sheets")
     
-    with st.spinner("Carregando dados da planilha..."):
-        df_prod = carregar_produtos_google()
-    
-    if not df_prod.empty:
+    if not df_produtos.empty:
         # Métricas rápidas
         col_m1, col_m2, col_m3 = st.columns(3)
-        col_m1.metric("Total de Produtos", len(df_prod))
-        col_m2.metric("Clientes", df_prod['cliente'].nunique() if 'cliente' in df_prod.columns else 0)
-        col_m3.metric("Carga média", f"{df_prod['qtd_carga'].mean():.0f}")
+        col_m1.metric("Total de Produtos", len(df_produtos))
+        col_m2.metric("Clientes", df_produtos['cliente'].nunique() if 'cliente' in df_produtos.columns else 0)
+        col_m3.metric("Carga média", f"{df_produtos['qtd_carga'].mean():.0f}")
         
         st.markdown("---")
         
@@ -376,8 +369,8 @@ with aba4:
         with st.expander("🔍 Filtrar produtos", expanded=False):
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                if 'cliente' in df_prod.columns:
-                    clientes = ['Todos'] + sorted(df_prod['cliente'].unique().tolist())
+                if 'cliente' in df_produtos.columns:
+                    clientes = ['Todos'] + sorted(df_produtos['cliente'].unique().tolist())
                     filtro_cliente = st.selectbox("Filtrar por Cliente", clientes)
                 else:
                     filtro_cliente = 'Todos'
@@ -386,7 +379,7 @@ with aba4:
                 busca = st.text_input("Buscar por ID_ITEM ou descrição")
             
             # Aplicar filtros
-            df_filtrado = df_prod.copy()
+            df_filtrado = df_produtos.copy()
             if filtro_cliente != 'Todos' and 'cliente' in df_filtrado.columns:
                 df_filtrado = df_filtrado[df_filtrado['cliente'] == filtro_cliente]
             
@@ -431,4 +424,4 @@ col_r1, col_r2, col_r3 = st.columns(3)
 with col_r1:
     st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
 with col_r3:
-    st.caption("🏭 PCP Industrial v3.4 - ID_ITEM, DESCRIÇÃO e CLIENTE")
+    st.caption("🏭 PCP Industrial v3.5 - Produtos em Session State")

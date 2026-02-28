@@ -5,3 +5,4 @@ plotly
 pytz
 openpyxl
 xlsxwriter
+gdown

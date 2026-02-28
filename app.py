@@ -153,4 +153,77 @@ with aba1:
             if st.form_submit_button("Lançar Setup"):
                 i_av = datetime.combine(d_av, h_av); f_av = i_av + timedelta(minutes=dur_av)
                 with conectar() as conn:
-                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim,
+                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                                (maq_av, "SETUP", desc_av, i_av.strftime('%Y-%m-%d %H:%M:%S'), f_av.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
+                st.success("Salvo!"); st.rerun()
+
+# --- ABA 2: GANTT ---
+with aba2:
+    df_g = carregar_dados()
+    if not df_g.empty:
+        df_g["status_cor"] = df_g["status"]
+        df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
+        fig = px.timeline(df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="rotulo_grafico",
+                         category_orders={"maquina": MAQUINAS},
+                         color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"})
+        fig.update_yaxes(autorange="reversed")
+        fig.add_vline(x=agora, line_dash="dash", line_color="red")
+        st.plotly_chart(fig, use_container_width=True)
+
+# --- ABA 3: GERENCIAR (CORREÇÃO DE KEYS) ---
+with aba3:
+    df_ger = carregar_dados()
+    t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])
+    with t_p:
+        if not df_ger.empty:
+            df_ab = df_ger[df_ger["status"] != "Concluído"].sort_values("inicio")
+            for _, r in df_ab.iterrows():
+                if r['status'] == "Setup" and r['vinculo_id'] is not None: continue 
+                with st.expander(f"{r['maquina']} | {r['pedido']}"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.write(f"**Item:** {r['item']} | **Qtd:** {int(r['qtd'])}")
+                        if st.button("✅ CONCLUIR", key=f"btn_conc_{r['id']}", use_container_width=True):
+                            with conectar() as c:
+                                c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
+                                c.execute("UPDATE agenda SET status='Concluído' WHERE vinculo_id=?", (r['id'],))
+                            st.rerun()
+                        if is_admin and st.button("🗑️ EXCLUIR", key=f"btn_del_{r['id']}", use_container_width=True):
+                            with conectar() as c:
+                                c.execute("DELETE FROM agenda WHERE id=?", (r['id'],)); c.execute("DELETE FROM agenda WHERE vinculo_id=?", (r['id'],))
+                            st.rerun()
+                    with c2:
+                        if is_admin:
+                            # PREFIXO 'edit_' ADICIONADO ABAIXO PARA EVITAR DUPLICIDADE
+                            nd = st.date_input("Nova Data", r['inicio'].date(), key=f"edit_date_{r['id']}")
+                            nh = st.time_input("Nova Hora", r['inicio'].time(), key=f"edit_time_{r['id']}")
+                            if st.button("Mover Pedido + Setup", key=f"btn_move_{r['id']}", use_container_width=True):
+                                ni = datetime.combine(nd, nh); ds = (ni - r['inicio']).total_seconds(); nf = r['fim'] + (ni - r['inicio'])
+                                with conectar() as c:
+                                    c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (ni.strftime('%Y-%m-%d %H:%M:%S'), nf.strftime('%Y-%m-%d %H:%M:%S'), r['id']))
+                                    c.execute("UPDATE agenda SET inicio = datetime(inicio, ? || ' seconds'), fim = datetime(fim, ? || ' seconds') WHERE vinculo_id = ?", (ds, ds, r['id']))
+                                st.rerun()
+    with t_c:
+        if not df_ger.empty: st.dataframe(df_ger[df_ger["status"] == "Concluído"], use_container_width=True)
+
+# --- ABA 4: CATÁLOGO ---
+with aba4:
+    if is_admin:
+        with st.form("form_prod_cat"):
+            c1, c2, c3 = st.columns(3); co = c1.text_input("Código"); de = c2.text_input("Descrição"); cl = c3.text_input("Cliente")
+            if st.form_submit_button("Salvar"):
+                with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (co, de, cl)); st.rerun()
+    st.dataframe(pd.read_sql_query("SELECT * FROM produtos", conectar()), use_container_width=True)
+
+# --- ABA 5: DASHBOARD ---
+with aba5:
+    st.subheader("Carga de Máquina (Horas Pendentes)")
+    df_dash = carregar_dados()
+    if not df_dash.empty:
+        df_aberto = df_dash[df_dash["status"] != "Concluído"]
+        c_met = st.columns(len(MAQUINAS))
+        for i, m in enumerate(MAQUINAS):
+            # Soma das horas de cada tarefa pendente na máquina
+            horas = ((df_aberto[df_aberto["maquina"] == m]["fim"] - df_aberto[df_aberto["maquina"] == m]["inicio"]).dt.total_seconds() / 3600).sum()
+            c_met[i].metric(label=f"Carga {m}", value=f"{horas:.1f} h")
+            st.progress(min(horas / 120, 1.0))

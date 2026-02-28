@@ -37,7 +37,6 @@ def carregar_dados():
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["h_ini"] = df["inicio"].dt.strftime('%H:%M')
         df["h_fim"] = df["fim"].dt.strftime('%H:%M')
-        # Rótulo aprovado: NOME DO PEDIDO + QUANTIDADE
         df["rotulo_barra"] = df.apply(lambda r: "SET.UP" if r['status'] == "Setup" else f"{r['pedido']}<br>QUANT: {int(r['qtd'])}", axis=1)
     return df
 
@@ -48,8 +47,9 @@ def proximo_horario(maq):
         if not df_maq.empty: return max(agora, df_maq["fim"].max())
     return agora
 
+# --- LOGIN ---
 if not st.session_state.auth_ok:
-    st.markdown("<h1 style='text-align:center;'>🏭 PCP William Industrial</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         email = st.text_input("E-mail autorizado:").lower().strip()
@@ -60,10 +60,75 @@ if not st.session_state.auth_ok:
 is_admin = st.session_state.user_email == ADMIN_EMAIL
 
 # ===============================
-# 2. INTERFACE
+# 2. CABEÇALHO PROFISSIONAL (O ESPAÇO MARCADO)
+# ===============================
+st.markdown("""
+    <div style="background-color: #1E1E1E; padding: 20px; border-radius: 10px; border-left: 10px solid #FF4B4B; margin-bottom: 20px;">
+        <h1 style="color: white; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 28px;">
+            📊 CONTROLE DINÂMICO DE PRODUÇÃO <span style="color: #FF4B4B;">|</span> PCP INDUSTRIAL
+        </h1>
+        <p style="color: #AAAAAA; margin: 5px 0 0 0; font-size: 14px;">Monitoramento em Tempo Real - Cronograma de Máquinas</p>
+    </div>
+    <hr style="margin-top: 0; margin-bottom: 20px; border: 0.5px solid #333;">
+    """, unsafe_allow_html=True)
+
+# ===============================
+# 3. INTERFACE DE ABAS
 # ===============================
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançamentos", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
+# ABA 2: GANTT (O CORAÇÃO DO SISTEMA)
+with aba2:
+    df_g = carregar_dados()
+    if not df_g.empty:
+        df_g["status_cor"] = df_g["status"]
+        df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
+        
+        fig = px.timeline(
+            df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="rotulo_barra",
+            category_orders={"maquina": MAQUINAS},
+            custom_data=["pedido", "h_ini", "h_fim", "item", "qtd"],
+            color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
+        )
+        
+        # ESCALA DE 2 DIAS
+        fig.update_xaxes(
+            type='date',
+            range=[agora - timedelta(hours=2), agora + timedelta(hours=46)],
+            dtick=10800000, # 3 horas
+            showgrid=True, gridcolor='rgba(255,255,255,0.05)',
+            tickformat="%d/%m\n%H:%M"
+        )
+        
+        fig.update_yaxes(autorange="reversed", title="")
+        
+        # LINHA AGORA
+        fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
+        
+        # RELÓGIO AGORA (POSIÇÃO ALTA E LIMPA)
+        fig.add_annotation(
+            x=agora, y=1.1, 
+            text=f"AGORA: {agora.strftime('%H:%M')}", 
+            showarrow=False, yref="paper", 
+            font=dict(color="#FF4B4B", size=18, family="Arial Black")
+        )
+        
+        fig.update_traces(
+            textposition='inside', 
+            insidetextanchor='start',
+            width=0.85, 
+            hovertemplate="<b>Pedido: %{customdata[0]}</b><br>Qtd: %{customdata[4]}<extra></extra>"
+        )
+        
+        fig.update_layout(
+            height=500,
+            bargap=0.05,
+            margin=dict(l=10, r=10, t=80, b=10),
+            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center")
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+# --- RESTANTE DAS ABAS (CÓDIGO INTEGRAL) ---
 with aba1:
     col_a, col_b = st.columns(2)
     with col_a:
@@ -93,58 +158,7 @@ with aba1:
                                 conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, p_id))
                         st.rerun()
 
-# --- ABA 2: GANTT COM HORÁRIO MAIS ALTO ---
-with aba2:
-    df_g = carregar_dados()
-    if not df_g.empty:
-        df_g["status_cor"] = df_g["status"]
-        df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
-        
-        fig = px.timeline(
-            df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="rotulo_barra",
-            category_orders={"maquina": MAQUINAS},
-            custom_data=["pedido", "h_ini", "h_fim", "item", "qtd"],
-            color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
-        )
-        
-        fig.update_xaxes(
-            type='date',
-            range=[agora - timedelta(hours=2), agora + timedelta(hours=46)],
-            dtick=10800000, # 3 horas
-            showgrid=True, gridcolor='rgba(255,255,255,0.1)',
-            tickformat="%d/%m\n%H:%M",
-            side="bottom"
-        )
-        
-        fig.update_yaxes(autorange="reversed", title="")
-        
-        # LINHA AGORA
-        fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-        
-        # ANOTAÇÃO SUBIDA (y=1.1) PARA NÃO BATER NAS BARRAS
-        fig.add_annotation(
-            x=agora, y=1.1, 
-            text=f"AGORA: {agora.strftime('%H:%M')}", 
-            showarrow=False, yref="paper", 
-            font=dict(color="red", size=16, family="Arial Black")
-        )
-        
-        fig.update_traces(
-            textposition='inside', 
-            insidetextanchor='start',
-            width=0.85, # Mantém barras grossas
-            hovertemplate="<b>Pedido: %{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Qtd: %{customdata[4]}<extra></extra>"
-        )
-        
-        fig.update_layout(
-            height=600,
-            bargap=0.05,
-            margin=dict(l=10, r=10, t=80, b=10), # Aumentei margem superior (t=80)
-            legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center")
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-with aba3: # GERENCIAR
+with aba3:
     df_ger = carregar_dados()
     if not df_ger.empty:
         df_ab = df_ger[df_ger["status"] != "Concluído"].sort_values(["maquina", "inicio"])

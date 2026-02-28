@@ -10,12 +10,14 @@ from streamlit_autorefresh import st_autorefresh
 # 1. CONFIGURAÇÃO E ACESSO
 # ===============================
 st.set_page_config(page_title="PCP Industrial", layout="wide")
-st_autorefresh(interval=30000, key="pcp_refresh_global")
+
+# ATUALIZAÇÃO ALTERADA PARA 2 MINUTOS (120000 ms)
+st_autorefresh(interval=120000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
 OPERACIONAL_EMAIL = "sarita@deco.com.br"
 
-# LISTAS DE MÁQUINAS SEPARADAS
+# LISTAS DE MÁQUINAS
 MAQUINAS_SERIGRAFIA = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
 MAQUINAS_SOPRO = [f"Sopro {i:02d}" for i in range(1, 22)] 
 TODAS_MAQUINAS = MAQUINAS_SERIGRAFIA + MAQUINAS_SOPRO
@@ -49,7 +51,7 @@ with conectar() as conn:
     """)
 
 # ===============================
-# FUNÇÃO PARA CARREGAR PRODUTOS DO GOOGLE SHEETS
+# CARREGAR PRODUTOS GOOGLE SHEETS
 # ===============================
 @st.cache_data(ttl=300)
 def carregar_produtos_google():
@@ -57,7 +59,6 @@ def carregar_produtos_google():
         df = pd.read_csv(GOOGLE_SHEETS_URL, sep=',', encoding='utf-8')
         df.columns = df.columns.str.strip()
         if 'ID_ITEM' not in df.columns:
-            st.error("❌ Coluna 'ID_ITEM' não encontrada!")
             return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
         
         df['id_item'] = df['ID_ITEM'].astype(str).str.strip()
@@ -75,12 +76,10 @@ def carregar_produtos_google():
         
         return df.fillna('N/A')
     except Exception as e:
-        st.error(f"❌ Erro ao carregar planilha: {e}")
         return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
 
 if 'df_produtos' not in st.session_state:
-    with st.spinner("Sincronizando com Google Sheets..."):
-        st.session_state.df_produtos = carregar_produtos_google()
+    st.session_state.df_produtos = carregar_produtos_google()
 
 df_produtos = st.session_state.df_produtos
 
@@ -120,7 +119,7 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # ===============================
-# CABEÇALHO COM RELÓGIO (LAYOUT PEDIDO)
+# CABEÇALHO COM RELÓGIO AJUSTADO
 # ===============================
 st.markdown(f"""
     <div style="background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
@@ -142,9 +141,7 @@ st.markdown(f"""
 # ABAS
 aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos (Google)", "📈 Cargas"])
 
-# ===============================
-# FUNÇÃO GANTT INDEPENDENTE
-# ===============================
+# FUNÇÃO GANTT
 def plotar_gantt(lista_maquinas, height_grafico=500):
     df_all = carregar_dados()
     if not df_all.empty:
@@ -175,16 +172,17 @@ def plotar_gantt(lista_maquinas, height_grafico=500):
             c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
             if ociosas: c3.warning(f"Sem carga: {len(ociosas)} máquinas")
             else: c3.success("✅ Setor 100% Ocupado")
-        else: st.info("ℹ️ Nenhuma produção cadastrada para este setor.")
+        else: st.info("ℹ️ Nenhuma produção cadastrada.")
     else: st.info("ℹ️ Banco de dados vazio.")
 
-# EXIBIÇÃO DAS ABAS DE GRÁFICOS
-with aba2: plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=500)
-with aba6: plotar_gantt(MAQUINAS_SOPRO, height_grafico=900)
+# EXIBIÇÃO
+with aba2: 
+    plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=500)
 
-# ===============================
-# ABA 1 - LANÇAR OP (Unificado)
-# ===============================
+with aba6: 
+    # ALTURA DO GRÁFICO DO SOPRO AUMENTADA PARA 1200 PARA MELHOR VISUALIZAÇÃO
+    plotar_gantt(MAQUINAS_SOPRO, height_grafico=1200)
+
 with aba1:
     with st.container(border=True):
         st.subheader("➕ Lançar Nova Ordem de Produção")
@@ -215,16 +213,13 @@ with aba1:
                     conn.commit()
                 st.success("✅ Lançado!"); st.rerun()
 
-# ===============================
-# ABA 3 - GERENCIAR
-# ===============================
 with aba3:
     st.subheader("⚙️ Gerenciar OPs")
     df_ger = carregar_dados()
     if not df_ger.empty:
         producoes = df_ger[df_ger["status"] == "Pendente"].sort_values("inicio")
         for _, prod in producoes.iterrows():
-            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
+            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']}"):
                 col_a, col_b, col_c = st.columns([3, 1, 1])
                 col_a.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')} | **Qtd:** {int(prod['qtd'])} un")
                 if col_b.button("✅ Concluir", key=f"c_{prod['id']}"):
@@ -238,16 +233,10 @@ with aba3:
                         c.commit()
                     st.rerun()
 
-# ===============================
-# ABA 4 - PRODUTOS (GOOGLE)
-# ===============================
 with aba4:
     st.subheader("📋 Catálogo Google Sheets")
     st.dataframe(df_produtos, use_container_width=True)
 
-# ===============================
-# ABA 5 - CARGAS
-# ===============================
 with aba5:
     st.subheader(f"📈 Resumo de Cargas (Base: {CARGA_UNIDADE})")
     df_c = carregar_dados()
@@ -264,4 +253,4 @@ with aba5:
             st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
 
 st.divider()
-st.caption(f"🕒 PCP Industrial v3.7 Final | Atualizado: {agora.strftime('%H:%M:%S')}")
+st.caption(f"🕒 PCP Industrial v3.8 | Refresh: 2min | Atualizado: {agora.strftime('%H:%M:%S')}")

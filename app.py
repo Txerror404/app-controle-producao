@@ -14,7 +14,7 @@ st.set_page_config(page_title="PCP William - Industrial", layout="wide")
 
 # Lista de e-mails autorizados (ADICIONE OS E-MAILS AQUI)
 EMAILS_AUTORIZADOS = [
-    "william@seuemail.com", 
+    "william.vieira@decoplast.com.br", 
     "admin@empresa.com",
     "producao@empresa.com"
 ]

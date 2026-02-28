@@ -16,7 +16,7 @@ ADMIN_EMAIL = "will@admin.com.br"
 OPERACIONAL_EMAIL = "sarita@deco.com.br"
 MAQUINAS = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
 CADENCIA_PADRAO = 2380
-CARGA_UNIDADE = 49504 
+CARGA_UNIDADE = 49504  # Corrigido caractere invisível aqui
 fuso_br = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(fuso_br).replace(tzinfo=None)
 
@@ -96,7 +96,7 @@ def carregar_produtos_google():
         return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
 
 # ===============================
-# CARREGAR PRODUTOS UMA ÚNICA VEZ NO SESSION STATE
+# CARREGAR PRODUTOS NO SESSION STATE
 # ===============================
 if 'df_produtos' not in st.session_state:
     with st.spinner("Carregando produtos da planilha..."):
@@ -208,7 +208,7 @@ with aba2:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP (USANDO SESSION STATE)
+# ABA 1 - LANÇAR OP
 # ===============================
 with aba1:
     with st.container(border=True):
@@ -219,13 +219,9 @@ with aba1:
             maquina_sel = st.selectbox("🏭 Máquina", MAQUINAS, key="maq_lanc")
             
             if not df_produtos.empty:
-                # Selectbox para ID_ITEM
                 opcoes_id_item = df_produtos['id_item'].tolist()
-                
-                # Selectbox
                 id_item_sel = st.selectbox("📌 ID_ITEM", opcoes_id_item, key="id_item_lanc")
                 
-                # Buscar informações do produto selecionado
                 if id_item_sel:
                     produto_info = df_produtos[df_produtos['id_item'] == id_item_sel]
                     if not produto_info.empty:
@@ -233,34 +229,14 @@ with aba1:
                         descricao_auto = info.get('descricao', '')
                         cliente_auto = info.get('cliente', 'N/A')
                         qtd_carga_sugerida = info.get('qtd_carga', CARGA_UNIDADE)
-                        
-                        # Garantir que seja número
-                        try:
-                            qtd_carga_sugerida = float(qtd_carga_sugerida) if qtd_carga_sugerida else CARGA_UNIDADE
-                        except:
-                            qtd_carga_sugerida = CARGA_UNIDADE
                     else:
-                        descricao_auto = ''
-                        cliente_auto = 'N/A'
-                        qtd_carga_sugerida = CARGA_UNIDADE
-                else:
-                    descricao_auto = ''
-                    cliente_auto = 'N/A'
-                    qtd_carga_sugerida = CARGA_UNIDADE
+                        descricao_auto = ''; cliente_auto = 'N/A'; qtd_carga_sugerida = CARGA_UNIDADE
             else:
-                st.error("❌ Não foi possível carregar produtos da planilha.")
-                id_item_sel = None
-                descricao_auto = ''
-                cliente_auto = "N/A"
-                qtd_carga_sugerida = CARGA_UNIDADE
+                id_item_sel = None; descricao_auto = ''; cliente_auto = "N/A"; qtd_carga_sugerida = CARGA_UNIDADE
         
         with col2:
             op_num = st.text_input("🔢 Número da OP", key="op_lanc")
-            
-            # Campo DESCRIÇÃO (readonly)
-            descricao_in = st.text_input("📝 DESCRIÇÃO", value=descricao_auto, key="desc_lanc", disabled=True)
-            
-            # Campo Cliente (readonly)
+            st.text_input("📝 DESCRIÇÃO", value=descricao_auto, key="desc_lanc", disabled=True)
             cliente_in = st.text_input("👥 Cliente", value=cliente_auto, key="cli_lanc", disabled=True)
         
         col3, col4, col5 = st.columns(3)
@@ -276,7 +252,6 @@ with aba1:
                 fim_prod = inicio + timedelta(hours=qtd/CADENCIA_PADRAO)
                 with conectar() as conn:
                     cur = conn.cursor()
-                    # Salvar ID_ITEM no campo 'item' da agenda
                     cur.execute("""
                         INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) 
                         VALUES (?,?,?,?,?,?,?)
@@ -294,11 +269,6 @@ with aba1:
                               "Setup", 0, producao_id))
                 st.success(f"✅ OP {op_num} lançada!")
                 st.rerun()
-            else:
-                if not op_num:
-                    st.error("❌ Digite o número da OP!")
-                elif not id_item_sel:
-                    st.error("❌ Selecione um ID_ITEM!")
 
 # ===============================
 # ABA 3 - GERENCIAR
@@ -306,122 +276,10 @@ with aba1:
 with aba3:
     st.subheader("⚙️ Gerenciar Ordens de Produção")
     df_ger = carregar_dados()
-    
     if not df_ger.empty:
         producoes = df_ger[df_ger["status"] == "Pendente"].sort_values("inicio")
-        
-        if producoes.empty:
-            st.info("✅ Nenhuma produção pendente no momento.")
-        else:
-            for _, prod in producoes.iterrows():
-                setup = df_ger[(df_ger["vinculo_id"] == prod["id"]) & (df_ger["status"] == "Setup")]
-                
-                with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
-                    col_a, col_b, col_c = st.columns([3, 1, 1])
-                    
-                    with col_a:
-                        st.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')}")
-                        st.write(f"**Quantidade:** {int(prod['qtd'])} unidades")
-                        if not setup.empty:
-                            s = setup.iloc[0]
-                            st.write(f"🔧 **Setup:** {s['inicio'].strftime('%H:%M')} às {s['fim'].strftime('%H:%M')}")
-                    
-                    if col_b.button("✅ Concluir", key=f"conc_{prod['id']}"):
-                        try:
-                            with conectar() as conn:
-                                conn.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", 
-                                           (prod['id'], prod['id']))
-                                conn.commit()
-                            st.success(f"OP {prod['pedido']} concluída!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro: {e}")
-                    
-                    if col_c.button("🗑️ Apagar", key=f"del_{prod['id']}"):
-                        try:
-                            with conectar() as conn:
-                                conn.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", 
-                                           (prod['id'], prod['id']))
-                                conn.commit()
-                            st.success(f"OP {prod['pedido']} apagada.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro: {e}")
-    else:
-        st.info("ℹ️ Nenhuma produção cadastrada.")
-
-# ===============================
-# ABA 4 - PRODUTOS (VISUALIZAÇÃO DA PLANILHA)
-# ===============================
-with aba4:
-    st.subheader("📋 Produtos - Fonte: Google Sheets")
-    
-    if not df_produtos.empty:
-        # Métricas rápidas
-        col_m1, col_m2, col_m3 = st.columns(3)
-        col_m1.metric("Total de Produtos", len(df_produtos))
-        col_m2.metric("Clientes", df_produtos['cliente'].nunique() if 'cliente' in df_produtos.columns else 0)
-        col_m3.metric("Carga média", f"{df_produtos['qtd_carga'].mean():.0f}")
-        
-        st.markdown("---")
-        
-        # Filtros
-        with st.expander("🔍 Filtrar produtos", expanded=False):
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                if 'cliente' in df_produtos.columns:
-                    clientes = ['Todos'] + sorted(df_produtos['cliente'].unique().tolist())
-                    filtro_cliente = st.selectbox("Filtrar por Cliente", clientes)
-                else:
-                    filtro_cliente = 'Todos'
-            
-            with col_f2:
-                busca = st.text_input("Buscar por ID_ITEM ou descrição")
-            
-            # Aplicar filtros
-            df_filtrado = df_produtos.copy()
-            if filtro_cliente != 'Todos' and 'cliente' in df_filtrado.columns:
-                df_filtrado = df_filtrado[df_filtrado['cliente'] == filtro_cliente]
-            
-            if busca:
-                df_filtrado = df_filtrado[
-                    df_filtrado['id_item'].astype(str).str.contains(busca, case=False, na=False) |
-                    df_filtrado['descricao'].astype(str).str.contains(busca, case=False, na=False)
-                ]
-        
-        # Mostrar dados
-        st.dataframe(df_filtrado, use_container_width=True)
-        
-        # Informação de atualização
-        st.caption(f"📅 Última atualização: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} (cache de 5 minutos)")
-    else:
-        st.error("❌ Não foi possível carregar os dados da planilha.")
-
-# ===============================
-# ABA 5 - CARGAS
-# ===============================
-with aba5:
-    st.subheader(f"📈 Cargas por Máquina (Base: {CARGA_UNIDADE} unid/carga)")
-    df_c = carregar_dados()
-    if not df_c.empty:
-        df_prod_c = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
-        cols = st.columns(4)
-        for i, maq in enumerate(MAQUINAS):
-            total_qtd = df_prod_c[df_prod_c["maquina"] == maq]["qtd"].sum()
-            cols[i].metric(label=f"🏭 {maq.upper()}", value=f"{total_qtd / CARGA_UNIDADE:.1f} cargas", delta=f"{int(total_qtd)} unid")
-        with st.expander("📋 Detalhamento por OP"):
-            for maq in MAQUINAS:
-                st.write(f"**{maq}**")
-                df_maq = df_prod_c[df_prod_c["maquina"] == maq]
-                if not df_maq.empty:
-                    for _, row in df_maq.iterrows(): 
-                        st.write(f"  • {row['pedido']}: {int(row['qtd'])} unid")
-                else: 
-                    st.write("  • Nenhuma OP")
-
-st.divider()
-col_r1, col_r2, col_r3 = st.columns(3)
-with col_r1:
-    st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
-with col_r3:
-    st.caption("🏭 PCP Industrial v3.5 - Produtos em Session State")
+        for _, prod in producoes.iterrows():
+            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
+                col_a, col_b, col_c = st.columns([3, 1, 1])
+                with col_a:
+                    st.write(f"**Período

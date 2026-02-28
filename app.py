@@ -125,7 +125,7 @@ st.markdown(f"""
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📋 Produtos (Google)", "📈 Cargas"])
 
 # ============================================================
-# ABA 2 - GANTT + RELÓGIO + RÉGUA COMPLETA
+# ABA 2 - GANTT + RELÓGIO + RÉGUA COMPLETA + CARDS
 # ============================================================
 with aba2:
     # --- RELÓGIO DIGITAL ---
@@ -177,15 +177,21 @@ with aba2:
         # --- CARDS DE APOIO ---
         st.markdown("---")
         atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
+        maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
+        ociosas = [m for m in MAQUINAS if m not in maqs_em_uso]
+        
         col_c1, col_c2, col_c3 = st.columns(3)
         col_c1.metric("🚨 OPs ATRASADAS", f"{atrasadas} itens")
-        col_c2.metric("💤 MÁQUINAS", len(MAQUINAS))
-        col_c3.success("✅ Sistema Monitorando")
+        col_c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
+        if ociosas:
+            col_c3.warning(f"Sem programação: {', '.join(ociosas)}")
+        else:
+            col_c3.success("✅ Todas as máquinas ocupadas")
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
-# ABA 1 - LANÇAR OP
+# ABA 1 - LANÇAR OP (COM BUSCA AUTOMÁTICA)
 # ===============================
 with aba1:
     with st.container(border=True):
@@ -228,25 +234,38 @@ with aba1:
                 st.success("✅ Lançado!"); st.rerun()
 
 # ===============================
-# ABA 3 - GERENCIAR
+# ABA 3 - GERENCIAR (CORRIGIDA)
 # ===============================
 with aba3:
     st.subheader("⚙️ Gerenciar OPs")
     df_ger = carregar_dados()
     if not df_ger.empty:
         producoes = df_ger[df_ger["status"] == "Pendente"].sort_values("inicio")
-        for _, prod in producoes.iterrows():
-            with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
-                col_a, col_b, col_c = st.columns([3, 1, 1])
-                with col_a:
-                    st.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')}")
-                    st.write(f"**Quantidade:** {int(prod['qtd'])} unidades")
-                if col_b.button("✅ Concluir", key=f"c_{prod['id']}"):
-                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
-                    st.rerun()
-                if col_c.button("🗑️ Apagar", key=f"d_{prod['id']}"):
-                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
-                    st.rerun()
+        if producoes.empty:
+            st.info("✅ Nenhuma produção pendente no momento.")
+        else:
+            for _, prod in producoes.iterrows():
+                setup = df_ger[(df_ger["vinculo_id"] == prod["id"]) & (df_ger["status"] == "Setup")]
+                with st.expander(f"📦 {prod['maquina']} | {prod['pedido']} - {prod['item']}"):
+                    col_a, col_b, col_c = st.columns([3, 1, 1])
+                    with col_a:
+                        st.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')}")
+                        st.write(f"**Quantidade:** {int(prod['qtd'])} unidades")
+                        if not setup.empty:
+                            s = setup.iloc[0]
+                            st.write(f"🔧 **Setup:** {s['inicio'].strftime('%H:%M')} às {s['fim'].strftime('%H:%M')}")
+                    if col_b.button("✅ Concluir", key=f"c_{prod['id']}"):
+                        with conectar() as c: 
+                            c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
+                            c.commit()
+                        st.rerun()
+                    if col_c.button("🗑️ Apagar", key=f"d_{prod['id']}"):
+                        with conectar() as c: 
+                            c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
+                            c.commit()
+                        st.rerun()
+    else:
+        st.info("ℹ️ Nenhuma produção cadastrada.")
 
 # ===============================
 # ABA 4 - PRODUTOS (GOOGLE)
@@ -267,6 +286,19 @@ with aba5:
         for i, maq in enumerate(MAQUINAS):
             total_qtd = df_p[df_p["maquina"] == maq]["qtd"].sum()
             cols[i].metric(label=f"🏭 {maq.upper()}", value=f"{total_qtd / CARGA_UNIDADE:.1f} cargas", delta=f"{int(total_qtd)} unid")
+        with st.expander("📋 Detalhamento por OP"):
+            for maq in MAQUINAS:
+                st.write(f"**{maq}**")
+                df_maq = df_p[df_p["maquina"] == maq]
+                if not df_maq.empty:
+                    for _, row in df_maq.iterrows(): 
+                        st.write(f"  • {row['pedido']}: {int(row['qtd'])} unid")
+                else: 
+                    st.write("  • Nenhuma OP")
 
 st.divider()
-st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')} | v3.5 Final")
+col_r1, col_r2, col_r3 = st.columns(3)
+with col_r1:
+    st.caption(f"🕒 Sistema atualizado: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
+with col_r3:
+    st.caption("🏭 PCP Industrial v3.5 - Completo Restaurado")

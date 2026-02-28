@@ -39,7 +39,26 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # ===============================
-# 2. VARIÁVEIS E BANCO
+# 2. SELETOR DE MODO (CLARO / ESCURO)
+# ===============================
+# Criamos uma opção no topo da barra lateral para o tema
+with st.sidebar:
+    st.title("🎨 Visual")
+    tema = st.radio("Modo de Exibição:", ["Escuro", "Claro"], horizontal=True)
+    st.markdown("---")
+
+# Definição de cores conforme o tema
+if tema == "Claro":
+    cor_texto_grafico = "black"
+    template_grafico = "plotly_white"
+    cor_linha_agora = "red"
+else:
+    cor_texto_grafico = "white"
+    template_grafico = "plotly_dark"
+    cor_linha_agora = "#FF4B4B"
+
+# ===============================
+# 3. VARIÁVEIS E BANCO
 # ===============================
 MAQUINAS = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
 CADENCIA = 2380
@@ -58,7 +77,7 @@ with conectar() as conn:
         pass 
 
 # ===============================
-# 3. FUNÇÕES DE APOIO
+# 4. FUNÇÕES DE APOIO
 # ===============================
 def carregar_dados():
     with conectar() as c:
@@ -67,17 +86,9 @@ def carregar_dados():
         df["inicio"] = pd.to_datetime(df["inicio"])
         df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
-        
-        # Formatação de Datas para o Tooltip (ex: 28/02 09:15)
         df["inicio_format"] = df["inicio"].dt.strftime('%d/%m %H:%M')
         df["fim_format"] = df["fim"].dt.strftime('%d/%m %H:%M')
-        
-        # Rótulo da Barra
-        df["rotulo_grafico"] = df.apply(
-            lambda r: "SETUP" if r['status'] == "Setup" 
-            else f"{r['pedido']} | Qtd: {int(r['qtd'])}", 
-            axis=1
-        )
+        df["rotulo_grafico"] = df.apply(lambda r: "SETUP" if r['status'] == "Setup" else f"{r['pedido']} | Qtd: {int(r['qtd'])}", axis=1)
     return df
 
 def carregar_produtos():
@@ -93,51 +104,41 @@ def proximo_horario(maq):
     return agora
 
 # ===============================
-# 4. INTERFACE PRINCIPAL
+# 5. INTERFACE
 # ===============================
 st.title("🏭 Gestão de Produção Industrial")
 
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Novo Pedido", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo"])
 
-# --- ABA 2: GANTT (TOOLTIP PERSONALIZADO) ---
+# --- ABA 2: GANTT ---
 with aba2:
-    st.subheader("Cronograma de Máquinas")
+    st.subheader(f"Cronograma de Máquinas ({tema})")
     df_g = carregar_dados()
     if not df_g.empty:
         df_g["status_cor"] = df_g["status"]
         df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
         
-        # Adicionamos custom_data para alimentar o Tooltip
         fig = px.timeline(
             df_g, x_start="inicio", x_end="fim", y="maquina", 
             color="status_cor", text="rotulo_grafico",
             category_orders={"maquina": MAQUINAS},
             custom_data=["pedido", "inicio_format", "fim_format", "item", "qtd"],
-            color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
+            color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"},
+            template=template_grafico # Aplica o modo Claro ou Escuro aqui
         )
         
-        # AJUSTE DO TOOLTIP (HOVER) CONFORME SUA IMAGEM
         fig.update_traces(
             textposition='inside', 
             insidetextanchor='start',
-            textfont=dict(size=12, color="white"),
-            hovertemplate="<br>".join([
-                "<b>%{customdata[0]}</b>",
-                "Início: %{customdata[1]}",
-                "Fim: %{customdata[2]}",
-                "Cód: %{customdata[3]}",
-                "Qtd: %{customdata[4]}",
-                "<extra></extra>" # Remove a caixa lateral com o nome do status
-            ])
+            textfont=dict(size=12, color="white" if tema == "Escuro" else "black"),
+            hovertemplate="<b>%{customdata[0]}</b><br>Início: %{customdata[1]}<br>Fim: %{customdata[2]}<br>Cód: %{customdata[3]}<br>Qtd: %{customdata[4]}<extra></extra>"
         )
         
         fig.update_yaxes(autorange="reversed")
-        fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-        fig.add_annotation(x=agora, y=1.05, yref="paper", text=f"⏱️ AGORA: {agora.strftime('%H:%M')}", showarrow=False, font=dict(color="white", size=14), bgcolor="red", borderpad=4)
+        fig.add_vline(x=agora, line_dash="dash", line_color=cor_linha_agora, line_width=2)
         st.plotly_chart(fig, use_container_width=True)
     
     # Cards de Status
-    st.markdown("---")
     cols = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
@@ -145,44 +146,36 @@ with aba2:
         elif not df_m[df_m["fim"] < agora].empty: cols[i].error(f"🚨 {m.upper()}\n\nEM ATRASO")
         else: cols[i].success(f"✅ {m.upper()}\n\nEm dia.")
 
-# --- ABA 1: NOVO PEDIDO ---
+# --- ABAS DE CADASTRO E GESTÃO (MANTIDAS) ---
 with aba1:
     st.subheader("Programar Máquina")
     df_p = carregar_produtos()
-    col_maq, col_prod = st.columns(2)
-    with col_maq:
+    c_m, c_pr = st.columns(2)
+    with c_m:
         maq_s = st.selectbox("Máquina", MAQUINAS)
         sugestao = proximo_horario(maq_s)
-    with col_prod:
+    with c_pr:
         if not df_p.empty:
             lista_p = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
             p_sel = st.selectbox("Produto", [""] + lista_p)
             item_a = p_sel.split(" | ")[0] if p_sel else ""; cli_a = df_p[df_p['codigo'] == item_a]['cliente'].values[0] if p_sel else ""
-        else: st.error("Cadastre produtos no Catálogo."); item_a, cli_a = "", ""
-
+        else: st.error("Cadastre produtos."); item_a, cli_a = "", ""
     with st.form("form_p"):
         c1, c2 = st.columns(2)
-        ped_n = c1.text_input("Nº Pedido")
-        cli_n = c1.text_input("Cliente", value=cli_a)
-        qtd_n = c2.number_input("Quantidade", value=2380)
-        set_n = c2.number_input("Setup (min)", value=30)
+        ped_n = c1.text_input("Nº Pedido"); cli_n = c1.text_input("Cliente", value=cli_a)
+        qtd_n = c2.number_input("Quantidade", value=2380); set_n = c2.number_input("Setup (min)", value=30)
         c3, c4 = st.columns(2)
         dat_n = c3.date_input("Data", sugestao.date()); hor_n = c4.time_input("Hora", sugestao.time())
-        if st.form_submit_button("Confirmar Lançamento"):
+        if st.form_submit_button("Lançar"):
             if ped_n and p_sel:
-                ini = datetime.combine(dat_n, hor_n)
-                fim = ini + timedelta(hours=qtd_n/CADENCIA)
+                ini = datetime.combine(dat_n, hor_n); fim = ini + timedelta(hours=qtd_n/CADENCIA)
                 with conectar() as conn:
-                    label = f"{cli_n} | {ped_n}"
-                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                                (maq_s, label, item_a, ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
+                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maq_s, f"{cli_n} | {ped_n}", item_a, ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
                     if set_n > 0:
                         fim_s = fim + timedelta(minutes=set_n)
-                        conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                                    (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), fim_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
-                st.success("Salvo!"); st.rerun()
+                        conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), fim_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
+                st.rerun()
 
-# --- ABA 3: GERENCIAR ---
 with aba3:
     df_ger = carregar_dados()
     t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])
@@ -191,34 +184,22 @@ with aba3:
             df_ab = df_ger[df_ger["status"] != "Concluído"].sort_values("inicio")
             for _, r in df_ab.iterrows():
                 with st.expander(f"{r['maquina']} | {r['pedido']}"):
-                    col_info, col_edit = st.columns(2)
-                    with col_info:
-                        st.write(f"**Cód Item:** {r['item']}")
-                        st.write(f"**Qtd:** {r['qtd']}")
+                    c_i, c_e = st.columns(2)
+                    with c_i:
                         if st.button("✅ CONCLUIR", key=f"c{r['id']}"):
-                            with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
-                            st.rerun()
+                            with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],)); st.rerun()
                         if st.button("🗑️ EXCLUIR", key=f"d{r['id']}"):
-                            with conectar() as c: c.execute("DELETE FROM agenda WHERE id=?", (r['id'],))
-                            st.rerun()
-                    with col_edit:
+                            with conectar() as c: c.execute("DELETE FROM agenda WHERE id=?", (r['id'],)); st.rerun()
+                    with c_e:
                         nd = st.date_input("Nova Data", r['inicio'].date(), key=f"dt{r['id']}")
                         nh = st.time_input("Nova Hora", r['inicio'].time(), key=f"hr{r['id']}")
                         if st.button("💾 Atualizar", key=f"up{r['id']}"):
-                            ni = datetime.combine(nd, nh)
-                            nf = ni + (r['fim'] - r['inicio'])
-                            with conectar() as c: c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (ni.strftime('%Y-%m-%d %H:%M:%S'), nf.strftime('%Y-%m-%d %H:%M:%S'), r['id']))
-                            st.rerun()
-    with t_c:
-        if not df_ger.empty:
-            df_con = df_ger[df_ger["status"] == "Concluído"].sort_values("fim", ascending=False)
-            st.dataframe(df_con, use_container_width=True)
+                            ni = datetime.combine(nd, nh); nf = ni + (r['fim'] - r['inicio'])
+                            with conectar() as c: c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (ni.strftime('%Y-%m-%d %H:%M:%S'), nf.strftime('%Y-%m-%d %H:%M:%S'), r['id'])); st.rerun()
 
-# --- ABA 4: CATÁLOGO ---
 with aba4:
     with st.form("f_prod"):
         c1, c2, c3 = st.columns(3); cod = c1.text_input("Código"); des = c2.text_input("Descrição"); cli = c3.text_input("Cliente")
         if st.form_submit_button("Salvar"):
-            with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (cod, des, cli))
-            st.rerun()
+            with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (cod, des, cli)); st.rerun()
     st.dataframe(carregar_produtos(), use_container_width=True)

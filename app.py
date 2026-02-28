@@ -73,7 +73,6 @@ def carregar_dados():
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["inicio_format"] = df["inicio"].dt.strftime('%d/%m %H:%M')
         df["fim_format"] = df["fim"].dt.strftime('%d/%m %H:%M')
-        # Regra do Rótulo: SETUP ou Cliente|Pedido|Qtd
         df["rotulo_grafico"] = df.apply(lambda r: "SETUP" if r['status'] == "Setup" else f"{r['pedido']} | Qtd: {int(r['qtd'])}", axis=1)
     return df
 
@@ -86,14 +85,22 @@ def proximo_horario(maq):
     return agora
 
 # ===============================
-# 4. INTERFACE PRINCIPAL
+# 4. SIDEBAR (RELÓGIO RESTAURADO)
 # ===============================
-st.sidebar.title(f"👤 {'ADMINISTRADOR' if is_admin else 'OPERADOR'}")
-st.sidebar.write(f"🕒 {agora.strftime('%H:%M:%S')}")
-if st.sidebar.button("Sair"):
-    st.session_state.auth_ok = False
-    st.rerun()
+with st.sidebar:
+    st.title(f"👤 {'ADMIN' if is_admin else 'OPERADOR'}")
+    # RELÓGIO VOLTOU AQUI:
+    st.markdown(f"### 🕒 {agora.strftime('%H:%M:%S')}")
+    st.write(f"📅 {agora.strftime('%d/%m/%Y')}")
+    st.write(f"Logado como: {st.session_state.user_email}")
+    st.markdown("---")
+    if st.button("Sair do Sistema"):
+        st.session_state.auth_ok = False
+        st.rerun()
 
+# ===============================
+# 5. ABAS PRINCIPAIS
+# ===============================
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Lançamentos", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo"])
 
 # --- ABA 1: LANÇAMENTOS (PEDIDO + SETUP AVULSO) ---
@@ -127,7 +134,7 @@ with aba1:
                             f_s = fim + timedelta(minutes=set_n)
                             conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
                                         (maq_s, "SETUP", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), f_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, pedido_id))
-                    st.success("Lançado!"); st.rerun()
+                    st.success("Lançado com Sucesso!"); st.rerun()
 
     with col_b:
         st.subheader("Setup Avulso / Manutenção")
@@ -147,12 +154,11 @@ with aba1:
                                 (maq_av, "SETUP", desc_av, i_av.strftime('%Y-%m-%d %H:%M:%S'), f_av.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
                 st.success("Setup avulso lançado!"); st.rerun()
 
-# --- ABA 2: GANTT (TODAS AS CORES E STATUS RESTAURADOS) ---
+# --- ABA 2: GANTT ---
 with aba2:
-    st.subheader("Cronograma de Máquinas")
+    st.subheader("Cronograma Real-Time")
     df_g = carregar_dados()
     if not df_g.empty:
-        # Lógica de Cor Executando (Laranja)
         df_g["status_cor"] = df_g["status"]
         df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
         
@@ -172,7 +178,7 @@ with aba2:
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
         st.plotly_chart(fig, use_container_width=True)
     
-    # Cards de Status Restaurados
+    # Cards de Status Abaixo do Gráfico
     cols = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         df_m = df_g[(df_g["maquina"] == m) & (df_g["status"] != "Concluído")] if not df_g.empty else pd.DataFrame()
@@ -180,7 +186,7 @@ with aba2:
         elif not df_m[df_m["fim"] < agora].empty: cols[i].error(f"🚨 {m.upper()}\n\nEM ATRASO")
         else: cols[i].success(f"✅ {m.upper()}\n\nEm dia.")
 
-# --- ABA 3: GERENCIAR (ADMIN E OPERADOR) ---
+# --- ABA 3: GERENCIAR ---
 with aba3:
     df_ger = carregar_dados()
     t_p, t_c = st.tabs(["⚡ Em Aberto", "✅ Histórico"])
@@ -188,7 +194,6 @@ with aba3:
         if not df_ger.empty:
             df_ab = df_ger[df_ger["status"] != "Concluído"].sort_values("inicio")
             for _, r in df_ab.iterrows():
-                # Oculta setups vinculados para gerenciar pelo pedido principal
                 if r['status'] == "Setup" and r['vinculo_id'] is not None: continue 
                 
                 with st.expander(f"{r['maquina']} | {r['pedido']}"):

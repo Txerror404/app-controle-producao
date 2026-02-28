@@ -93,7 +93,7 @@ if not st.session_state.auth_ok:
     st.stop()
 
 # ===============================
-# CABEÇALHO COMPACTO (GANHO DE ESPAÇO)
+# CABEÇALHO COMPACTO
 # ===============================
 st.markdown(f"""
     <style>
@@ -118,7 +118,7 @@ st.markdown(f"""
 aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
 
 # ===============================
-# FUNÇÃO GANTT COM AJUSTE DE RELÓGIO (AGORA NO EIXO X)
+# FUNÇÃO GANTT COM INDICADORES
 # ===============================
 def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
     df_all = carregar_dados()
@@ -134,48 +134,52 @@ def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
                 color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
             )
             
-            # Ajuste de Datas e Relógio no Eixo X (Conforme Imagem)
             fig.update_xaxes(
                 type='date', 
                 range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], 
-                dtick=10800000, # 3 horas
-                tickformat="%d/%m\n%H:%M", 
-                gridcolor='rgba(255,255,255,0.1)', 
-                showgrid=True, 
+                dtick=10800000, tickformat="%d/%m\n%H:%M", 
+                gridcolor='rgba(255,255,255,0.1)', showgrid=True, 
                 tickfont=dict(size=10, color="white")
             )
-            
             fig.update_yaxes(autorange="reversed", title="")
-            
-            # Linha Vermelha de "AGORA"
             fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
             
-            # Texto "AGORA" movido para baixo (conforme imagem)
+            # Texto "AGORA" no eixo X
             fig.add_annotation(
-                x=agora, y=-0.08, # Posição abaixo do eixo X
-                text=f"AGORA: {agora.strftime('%H:%M')}", 
-                showarrow=False, 
-                xref="x", yref="paper", 
+                x=agora, y=-0.08, text=f"AGORA: {agora.strftime('%H:%M')}", 
+                showarrow=False, xref="x", yref="paper", 
                 font=dict(color="red", size=14, family="Arial Black"),
                 bgcolor="rgba(0,0,0,0.8)"
             )
             
             fig.update_traces(textposition='inside', insidetextanchor='start', width=espessura_barra)
-            
             fig.update_layout(
-                height=height_grafico, 
-                margin=dict(l=10, r=10, t=30, b=60), # Margem superior reduzida, inferior aumentada para o texto "Agora"
-                plot_bgcolor='rgba(0,0,0,0)', 
-                paper_bgcolor='rgba(0,0,0,0)',
+                height=height_grafico, margin=dict(l=10, r=10, t=30, b=60), 
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig, use_container_width=True)
+
+            # --- INDICADORES ---
+            st.markdown("---")
+            atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
+            maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
+            ociosas = [m for m in lista_maquinas if m not in maqs_em_uso]
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("🚨 OPs ATRASADAS", f"{atrasadas}")
+            c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
+            if ociosas:
+                c3.warning(f"Atenção: {len(ociosas)} máquinas sem carga")
+                with st.expander("Ver máquinas ociosas"):
+                    st.write(", ".join(ociosas))
+            else:
+                c3.success("✅ Setor 100% Ocupado")
 
 with aba2: 
     plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=450)
 
 with aba6: 
-    # Reduzida espessura da barra (width=0.6) para caber as 21 máquinas melhor
     plotar_gantt(MAQUINAS_SOPRO, height_grafico=1100, espessura_barra=0.6)
 
 with aba1:
@@ -232,4 +236,4 @@ with aba5:
         st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
 
 st.divider()
-st.caption(f"v3.9 | Refresh 2min | {agora.strftime('%H:%M:%S')}")
+st.caption(f"v3.9.5 | Refresh 2min | {agora.strftime('%H:%M:%S')}")

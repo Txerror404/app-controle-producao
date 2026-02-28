@@ -14,7 +14,7 @@ st.set_page_config(page_title="PCP William - Industrial", layout="wide")
 
 # Lista de e-mails autorizados
 EMAILS_AUTORIZADOS = [
-    "will@admin.com.br", 
+    "william@seuemail.com", 
     "admin@empresa.com",
     "producao@empresa.com"
 ]
@@ -87,49 +87,65 @@ st.title("🏭 Gestão de Produção Industrial")
 
 with st.sidebar:
     st.title("👤 Usuário Ativo")
+    st.write(f"Hora Local: **{agora.strftime('%H:%M:%S')}**") # Relógio na barra lateral também
     if st.button("Sair do Sistema"):
         st.session_state.auth_ok = False
         st.rerun()
 
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Novo Pedido", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo"])
 
-# --- ABA 2: GANTT (ATUALIZADA) ---
+# --- ABA 2: GANTT (COM RELÓGIO NA LINHA VERMELHA) ---
 with aba2:
     st.subheader("Cronograma de Máquinas")
     df_g = carregar_dados()
     
-    # Criamos o gráfico mesmo que o DF esteja vazio para manter o campo das máquinas fixo
     if not df_g.empty:
         df_g["status_cor"] = df_g["status"]
         df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente"), "status_cor"] = "Executando"
         
         fig = px.timeline(
             df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="pedido",
-            category_orders={"maquina": MAQUINAS}, # MANTÉM A ORDEM FIXA
+            category_orders={"maquina": MAQUINAS},
             color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
     else:
-        # Se não houver dados, cria um gráfico vazio mas com as máquinas no eixo Y
         fig = px.timeline(pd.DataFrame([{"maquina": m, "inicio": agora, "fim": agora} for m in MAQUINAS]), 
                           x_start="inicio", x_end="fim", y="maquina", category_orders={"maquina": MAQUINAS})
-        fig.update_traces(visible=False) # Esconde a barra "fantasma"
+        fig.update_traces(visible=False)
 
     fig.update_yaxes(autorange="reversed", title="Máquinas")
+    
+    # LINHA VERMELHA E RELÓGIO (CONTADOR)
     fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
+    
+    # Adicionando o relógio (texto) que segue a linha
+    fig.add_annotation(
+        x=agora,
+        y=1.05, # Posição acima do gráfico
+        yref="paper",
+        text=f"⏱️ AGORA: {agora.strftime('%H:%M')}",
+        showarrow=False,
+        font=dict(color="white", size=14),
+        bgcolor="red",
+        bordercolor="red",
+        borderwidth=2,
+        borderpad=4,
+        align="center"
+    )
+    
     st.plotly_chart(fig, use_container_width=True)
 
-    # Exibe avisos para máquinas sem programação
+    # Avisos de Máquina
     st.markdown("---")
     maquinas_com_dados = df_g["maquina"].unique() if not df_g.empty else []
-    
     cols_avisos = st.columns(len(MAQUINAS))
     for i, m in enumerate(MAQUINAS):
         if m not in maquinas_com_dados:
-            cols_avisos[i].warning(f"⚠️ {m.upper()}\n\nSem programação ativa.")
+            cols_avisos[i].warning(f"⚠️ {m.upper()}\n\nSem programação.")
         else:
             cols_avisos[i].success(f"✅ {m.upper()}\n\nEm operação.")
 
-# --- ABA 1: NOVO PEDIDO ---
+# --- ABAS 1, 3 e 4 (Mantidas conforme o padrão estável anterior) ---
 with aba1:
     st.subheader("Programar Máquina")
     df_p = carregar_produtos()
@@ -137,28 +153,17 @@ with aba1:
     with col_maq:
         maq_s = st.selectbox("Máquina", MAQUINAS)
         sugestao = proximo_horario(maq_s)
-        st.info(f"Próxima disponibilidade: {sugestao.strftime('%d/%m %H:%M')}")
-    
     with col_prod:
         if not df_p.empty:
             lista_p = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
             p_sel = st.selectbox("Produto", [""] + lista_p)
             item_a = p_sel.split(" | ")[1] if p_sel else ""
             cli_a = df_p[df_p['codigo'] == p_sel.split(" | ")[0]]['cliente'].values[0] if p_sel else ""
-        else:
-            st.error("Cadastre produtos na aba Catálogo.")
-            item_a, cli_a = "", ""
-
+        else: st.error("Cadastre produtos no Catálogo."); item_a, cli_a = "", ""
     with st.form("form_p"):
-        c1, c2 = st.columns(2)
-        ped_n = c1.text_input("Nº Pedido")
-        cli_n = c1.text_input("Cliente", value=cli_a)
-        qtd_n = c2.number_input("Quantidade", value=2380)
-        set_n = c2.number_input("Setup (min)", value=30)
-        c3, c4 = st.columns(2)
-        dat_n = c3.date_input("Data", sugestao.date())
-        hor_n = c4.time_input("Hora", sugestao.time())
-
+        c1, c2 = st.columns(2); ped_n = c1.text_input("Nº Pedido"); cli_n = c1.text_input("Cliente", value=cli_a)
+        qtd_n = c2.number_input("Quantidade", value=2380); set_n = c2.number_input("Setup (min)", value=30)
+        c3, c4 = st.columns(2); dat_n = c3.date_input("Data", sugestao.date()); hor_n = c4.time_input("Hora", sugestao.time())
         if st.form_submit_button("Lançar"):
             if ped_n and p_sel:
                 ini = max(datetime.combine(dat_n, hor_n), proximo_horario(maq_s))
@@ -166,16 +171,13 @@ with aba1:
                 with conectar() as conn:
                     conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status) VALUES (?,?,?,?,?,?)",
                                 (maq_s, f"{cli_n} | {ped_n}", item_a, ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente"))
-                st.success("Salvo!")
-                st.rerun()
+                st.success("Salvo!"); st.rerun()
 
-# --- ABA 3: GERENCIAR ---
 with aba3:
     df_ger = carregar_dados()
     if not df_ger.empty:
         buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine='xlsxwriter') as writer:
-            df_ger.to_excel(writer, index=False)
+        with pd.ExcelWriter(buf, engine='xlsxwriter') as writer: df_ger.to_excel(writer, index=False)
         st.download_button("📥 Exportar Excel", buf.getvalue(), "PCP.xlsx")
         for _, r in df_ger.sort_values("inicio", ascending=False).iterrows():
             with st.expander(f"{r['maquina']} - {r['pedido']}"):
@@ -186,13 +188,9 @@ with aba3:
                     with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
                     st.rerun()
 
-# --- ABA 4: CATÁLOGO ---
 with aba4:
     with st.form("f_prod"):
-        c1, c2, c3 = st.columns(3)
-        cod = c1.text_input("Código")
-        des = c2.text_input("Descrição")
-        cli = c3.text_input("Cliente")
+        c1, c2, c3 = st.columns(3); cod = c1.text_input("Código"); des = c2.text_input("Descrição"); cli = c3.text_input("Cliente")
         if st.form_submit_button("Salvar"):
             with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (cod, des, cli))
             st.rerun()

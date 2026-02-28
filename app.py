@@ -129,4 +129,100 @@ with aba1:
             lista_p = [f"{r['codigo']} | {r['descricao']}" for _, r in df_p.iterrows()]
             p_sel = st.selectbox("Produto", [""] + lista_p)
             item_a = p_sel.split(" | ")[1] if p_sel else ""; cli_a = df_p[df_p['codigo'] == p_sel.split(" | ")[0]]['cliente'].values[0] if p_sel else ""
-        else: st.error("Cadastre produtos no Catálogo."); item
+        else: st.error("Cadastre produtos no Catálogo."); item_a, cli_a = "", ""
+
+    with st.form("form_p"):
+        c1, c2 = st.columns(2)
+        ped_n = c1.text_input("Nº Pedido")
+        cli_n = c1.text_input("Cliente", value=cli_a)
+        qtd_n = c2.number_input("Quantidade", value=2380)
+        set_n = c2.number_input("Setup (min)", value=30)
+        c3, c4 = st.columns(2)
+        dat_n = c3.date_input("Data", sugestao.date()); hor_n = c4.time_input("Hora", sugestao.time())
+        if st.form_submit_button("Confirmar Lançamento"):
+            if ped_n and p_sel:
+                ini = datetime.combine(dat_n, hor_n)
+                fim = ini + timedelta(hours=qtd_n/CADENCIA)
+                with conectar() as conn:
+                    conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                                (maq_s, f"{cli_n} | {ped_n}", item_a, ini.strftime('%Y-%m-%d %H:%M:%S'), fim.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_n))
+                    if set_n > 0:
+                        fim_s = fim + timedelta(minutes=set_n)
+                        conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                                    (maq_s, f"SETUP - {ped_n}", "Ajuste", fim.strftime('%Y-%m-%d %H:%M:%S'), fim_s.strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0))
+                st.success("Salvo!"); st.rerun()
+
+# --- ABA 3: GERENCIAR (MELHORADA COM SUB-TABS) ---
+with aba3:
+    st.subheader("Painel de Gestão de Ordens")
+    df_ger = carregar_dados()
+    
+    tab_pendentes, tab_concluidos = st.tabs(["⚡ Em Aberto / Atrasados", "✅ Histórico (Concluídos)"])
+
+    with tab_pendentes:
+        if not df_ger.empty:
+            # Filtra apenas o que não foi concluído
+            df_aberto = df_ger[df_ger["status"] != "Concluído"].sort_values("inicio")
+            
+            if df_aberto.empty:
+                st.success("Tudo em dia! Nenhuma ordem pendente.")
+            else:
+                for _, r in df_aberto.iterrows():
+                    # Lógica de cor para o cabeçalho (Vermelho se atrasado)
+                    is_atrasado = r['fim'] < agora
+                    prefixo = "🚨 ATRASADO -" if is_atrasado else "⏳"
+                    
+                    with st.expander(f"{prefixo} {r['maquina']} | {r['pedido']}"):
+                        col_info, col_edit = st.columns([2, 2])
+                        with col_info:
+                            st.write(f"**Item:** {r['item']}")
+                            st.write(f"**Início:** {r['inicio'].strftime('%d/%m %H:%M')}")
+                            st.write(f"**Fim:** {r['fim'].strftime('%d/%m %H:%M')}")
+                            
+                            c1, c2 = st.columns(2)
+                            if c1.button("✅ CONCLUIR", key=f"c{r['id']}", use_container_width=True):
+                                with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (r['id'],))
+                                st.rerun()
+                            if c2.button("🗑️ EXCLUIR", key=f"d{r['id']}", use_container_width=True):
+                                with conectar() as c: c.execute("DELETE FROM agenda WHERE id=?", (r['id'],))
+                                st.rerun()
+
+                        with col_edit:
+                            st.markdown("🛠️ **Ajustar Planejamento**")
+                            n_data = st.date_input("Nova Data", value=r['inicio'].date(), key=f"dt{r['id']}")
+                            n_hora = st.time_input("Nova Hora", value=r['inicio'].time(), key=f"hr{r['id']}")
+                            if st.button("💾 Atualizar Horário", key=f"up{r['id']}"):
+                                n_ini = datetime.combine(n_data, n_hora)
+                                n_fim = n_ini + (r['fim'] - r['inicio'])
+                                with conectar() as c:
+                                    c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", (n_ini.strftime('%Y-%m-%d %H:%M:%S'), n_fim.strftime('%Y-%m-%d %H:%M:%S'), r['id']))
+                                st.success("Horário atualizado!")
+                                st.rerun()
+
+    with tab_concluidos:
+        if not df_ger.empty:
+            df_concluido = df_ger[df_ger["status"] == "Concluído"].sort_values("fim", ascending=False)
+            if df_concluido.empty:
+                st.info("Nenhum pedido concluído ainda.")
+            else:
+                # Botão para exportar apenas o histórico
+                buf = io.BytesIO()
+                with pd.ExcelWriter(buf, engine='xlsxwriter') as writer: df_concluido.to_excel(writer, index=False)
+                st.download_button("📥 Baixar Histórico Excel", buf.getvalue(), "Historico_PCP.xlsx")
+                
+                for _, r in df_concluido.iterrows():
+                    with st.expander(f"✅ {r['maquina']} | {r['pedido']} (Fim: {r['fim'].strftime('%d/%m %H:%M')})"):
+                        st.write(f"**Item:** {r['item']}")
+                        st.write(f"**Período:** {r['inicio'].strftime('%d/%m %H:%M')} até {r['fim'].strftime('%d/%m %H:%M')}")
+                        if st.button("Reabrir Ordem", key=f"re{r['id']}"):
+                            with conectar() as c: c.execute("UPDATE agenda SET status='Pendente' WHERE id=?", (r['id'],))
+                            st.rerun()
+
+# --- ABA 4: CATÁLOGO ---
+with aba4:
+    with st.form("f_prod"):
+        c1, c2, c3 = st.columns(3); cod = c1.text_input("Código"); des = c2.text_input("Descrição"); cli = c3.text_input("Cliente Padrão")
+        if st.form_submit_button("Cadastrar Produto"):
+            with conectar() as c: c.execute("INSERT OR REPLACE INTO produtos VALUES (?,?,?)", (cod, des, cli))
+            st.rerun()
+    st.dataframe(carregar_produtos(), use_container_width=True)

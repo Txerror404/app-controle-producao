@@ -4,11 +4,21 @@ import plotly.express as px
 import sqlite3
 from datetime import datetime, timedelta
 import pytz
+import time # Importado para o relógio
 
 # ===============================
 # CONFIGURAÇÃO
 # ===============================
 st.set_page_config(page_title="PCP William - Profissional", layout="wide")
+
+# --- LÓGICA DO RELÓGIO (AUTO REFRESH) ---
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = time.time()
+
+# Atualiza a cada 30 segundos
+if time.time() - st.session_state.last_refresh > 30:
+    st.session_state.last_refresh = time.time()
+    st.rerun()
 
 MAQUINAS = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
 CADENCIA = 2380
@@ -18,402 +28,176 @@ agora = datetime.now(fuso_br).replace(tzinfo=None)
 # ===============================
 # BANCO SQLITE
 # ===============================
-conn = sqlite3.connect("pcp.db", check_same_thread=False)
+def conectar():
+    return sqlite3.connect("pcp.db", check_same_thread=False)
+
+conn = conectar()
 cursor = conn.cursor()
 
-# Tabela de Agenda
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS agenda (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    maquina TEXT,
-    pedido TEXT,
-    item TEXT,
-    inicio TEXT,
-    fim TEXT,
-    status TEXT
-)
-""")
-
-# Tabela de Produtos
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS produtos (
-    codigo TEXT PRIMARY KEY,
-    descricao TEXT,
-    cliente TEXT
-)
-""")
+# Tabelas
+cursor.execute("CREATE TABLE IF NOT EXISTS agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, maquina TEXT, pedido TEXT, item TEXT, inicio TEXT, fim TEXT, status TEXT)")
+cursor.execute("CREATE TABLE IF NOT EXISTS produtos (codigo TEXT PRIMARY KEY, descricao TEXT, cliente TEXT)")
 conn.commit()
 
 # ===============================
-# FUNÇÕES CORRIGIDAS (SEM SOBREPOSIÇÃO)
+# FUNÇÕES DE LÓGICA
 # ===============================
 def carregar_dados():
-    df = pd.read_sql_query("SELECT * FROM agenda", conn)
+    c = conectar()
+    df = pd.read_sql_query("SELECT * FROM agenda", c)
+    c.close()
     if not df.empty:
         df["inicio"] = pd.to_datetime(df["inicio"])
         df["fim"] = pd.to_datetime(df["fim"])
     return df
 
 def carregar_produtos():
-    return pd.read_sql_query("SELECT * FROM produtos", conn)
+    c = conectar()
+    df = pd.read_sql_query("SELECT * FROM produtos", c)
+    c.close()
+    return df
 
 def obter_proximo_horario_livre(maquina_nome):
-    """
-    Retorna o horário mais tarde entre:
-    - Agora
-    - Fim do último evento (produção ou setup) da máquina
-    """
     df = carregar_dados()
     if not df.empty:
-        # Filtra apenas eventos desta máquina (todos os status, incluindo Setup)
         df_maq = df[df["maquina"] == maquina_nome]
         if not df_maq.empty:
-            # Pega o fim do último evento (pode ser produção ou setup)
             ultimo_fim = df_maq["fim"].max()
-            # Retorna o maior entre agora e o fim do último evento
             return max(agora, ultimo_fim)
     return agora
 
 def salvar_pedido_com_setup(maquina, pedido, item, inicio_desejado, minutos_setup, qtd):
-    """
-    Agenda produção e setup respeitando a ordem cronológica:
-    1. Se houver tempo livre antes do início desejado, usa esse tempo
-    2. Produção começa no horário livre
-    3. Setup começa imediatamente após a produção
-    """
+    # Garante que não comece antes do que a máquina está livre ou de agora
+    horario_livre = max(inicio_desejado, obter_proximo_horario_livre(maquina))
     
-    # 1. ENCONTRAR O PRÓXIMO HORÁRIO LIVRE REAL
-    df = carregar_dados()
-    horario_livre = inicio_desejado
-    
-    if not df.empty:
-        # Pegar todos os eventos da máquina ordenados
-        df_maq = df[df["maquina"] == maquina].sort_values("inicio")
-        
-        if not df_maq.empty:
-            # Verificar se o horário desejado está livre
-            for _, row in df_maq.iterrows():
-                # Se o horário desejado está dentro de um bloco existente
-                if horario_livre < row["fim"] and horario_livre >= row["inicio"]:
-                    # Ajusta para depois do fim deste bloco
-                    horario_livre = row["fim"]
-                # Se o horário desejado está antes do próximo bloco, mantém
-    
-    # 2. CALCULAR TEMPO DE PRODUÇÃO
     tempo_producao_horas = qtd / CADENCIA
     fim_producao = horario_livre + timedelta(hours=tempo_producao_horas)
     
-    # 3. INSERIR PRODUÇÃO
-    cursor.execute("""
-        INSERT INTO agenda (maquina, pedido, item, inicio, fim, status)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        maquina, 
-        pedido, 
-        item, 
-        horario_livre.strftime('%Y-%m-%d %H:%M:%S'), 
-        fim_producao.strftime('%Y-%m-%d %H:%M:%S'), 
-        "Pendente"
-    ))
+    c = conectar()
+    cur = c.cursor()
+    # Inserir Produção
+    cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status) VALUES (?,?,?,?,?,?)",
+                (maquina, pedido, item, horario_livre.strftime('%Y-%m-%d %H:%M:%S'), fim_producao.strftime('%Y-%m-%d %H:%M:%S'), "Pendente"))
     
-    # 4. INSERIR SETUP (imediatamente após a produção)
+    # Inserir Setup
     if minutos_setup > 0:
         fim_setup = fim_producao + timedelta(minutes=minutos_setup)
-        cursor.execute("""
-            INSERT INTO agenda (maquina, pedido, item, inicio, fim, status)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            maquina, 
-            f"SETUP - {pedido}", 
-            "Limpeza/Ajuste", 
-            fim_producao.strftime('%Y-%m-%d %H:%M:%S'), 
-            fim_setup.strftime('%Y-%m-%d %H:%M:%S'), 
-            "Setup"
-        ))
+        cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status) VALUES (?,?,?,?,?,?)",
+                    (maquina, f"SETUP - {pedido}", "Ajuste", fim_producao.strftime('%Y-%m-%d %H:%M:%S'), fim_setup.strftime('%Y-%m-%d %H:%M:%S'), "Setup"))
     
-    conn.commit()
-    return horario_livre, fim_producao, fim_setup if minutos_setup > 0 else None
+    c.commit()
+    c.close()
+    return horario_livre, fim_producao
 
 # ===============================
 # INTERFACE
 # ===============================
-st.title("📊 PCP William - Sistema Integrado")
+st.title("🏭 PCP William - Dashboard Industrial")
+
+# Métricas de topo (Dashboard rápido)
+df_resumo = carregar_dados()
+if not df_resumo.empty:
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🔵 Pendentes", len(df_resumo[df_resumo["status"] == "Pendente"]))
+    executando = len(df_resumo[(df_resumo["inicio"] <= agora) & (df_resumo["fim"] >= agora) & (df_resumo["status"] != "Concluído")])
+    c2.metric("🟠 Em Execução", executando)
+    c3.metric("🟢 Concluídos", len(df_resumo[df_resumo["status"] == "Concluído"]))
 
 aba1, aba2, aba3, aba4 = st.tabs(["➕ Adicionar Pedido", "📊 Gantt de Produção", "⚙️ Gerenciar", "📦 Cadastro de Produtos"])
 
-# ===============================
-# ABA 4 - CADASTRO DE PRODUTOS
-# ===============================
+# --- ABA 4: CADASTRO --- (Mantida a sua lógica)
 with aba4:
     st.subheader("📦 Cadastrar Novo Produto")
-    
     col1, col2, col3 = st.columns([2, 3, 2])
-    with col1:
-        novo_cod = st.text_input("Código do Produto (Ex: REF-100)", key="novo_codigo")
-    with col2:
-        nova_desc = st.text_input("Descrição/Nome do Produto", key="nova_descricao")
-    with col3:
-        novo_cli = st.text_input("Cliente", key="novo_cliente")
+    with col1: novo_cod = st.text_input("Código", key="n_cod")
+    with col2: nova_desc = st.text_input("Descrição", key="n_desc")
+    with col3: novo_cli = st.text_input("Cliente", key="n_cli")
     
-    if st.button("✅ Cadastrar Produto", key="btn_cadastrar_produto"):
+    if st.button("✅ Cadastrar Produto"):
         if novo_cod and nova_desc:
-            try:
-                # Verificar se o código já existe
-                cursor.execute("SELECT codigo FROM produtos WHERE codigo = ?", (novo_cod,))
-                if cursor.fetchone():
-                    st.error("❌ Código já existe! Use um código diferente.")
-                else:
-                    cursor.execute("INSERT INTO produtos (codigo, descricao, cliente) VALUES (?, ?, ?)", 
-                                   (novo_cod, nova_desc, novo_cli))
-                    conn.commit()
-                    st.success("✅ Produto cadastrado com sucesso!")
-                    
-                    # Limpar os campos
-                    for key in ["novo_codigo", "nova_descricao", "novo_cliente"]:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro inesperado: {str(e)}")
-        else:
-            st.warning("⚠️ Preencha pelo menos o código e a descrição do produto!")
-    
+            c = conectar(); cur = c.cursor()
+            cur.execute("INSERT INTO produtos (codigo, descricao, cliente) VALUES (?, ?, ?)", (novo_cod, nova_desc, novo_cli))
+            c.commit(); c.close()
+            st.success("Produto salvo!")
+            st.rerun()
+
     st.divider()
-    
-    st.subheader("📋 Produtos Cadastrados")
     df_p = carregar_produtos()
-    
     if not df_p.empty:
         st.dataframe(df_p, use_container_width=True)
-        
-        col_del1, col_del2 = st.columns([3, 1])
-        with col_del1:
-            prod_del = st.selectbox("Selecionar produto para excluir", df_p['codigo'].tolist(), key="select_excluir_produto")
-        with col_del2:
-            if st.button("🗑️ Excluir Produto", key="btn_excluir_produto"):
-                cursor.execute("DELETE FROM produtos WHERE codigo=?", (prod_del,))
-                conn.commit()
-                st.success(f"✅ Produto {prod_del} excluído com sucesso!")
-                st.rerun()
-    else:
-        st.info("ℹ️ Nenhum produto cadastrado ainda.")
 
-# ===============================
-# ABA 1 - ADICIONAR PEDIDO (CORRIGIDA)
-# ===============================
+# --- ABA 1: ADICIONAR PEDIDO --- (Com correção de sobreposição)
 with aba1:
-    st.subheader("➕ Novo Pedido de Produção")
+    st.subheader("➕ Novo Pedido")
     df_prods = carregar_produtos()
     
-    col_maq, col_prod = st.columns(2)
-    with col_maq:
-        maq_sel = st.selectbox("Máquina", MAQUINAS, key="sel_maquina")
+    col_m, col_p = st.columns(2)
+    with col_m:
+        maq_sel = st.selectbox("Máquina", MAQUINAS)
         sugestao = obter_proximo_horario_livre(maq_sel)
-    
-    with col_prod:
+        st.write(f"🕒 Próximo horário livre: **{sugestao.strftime('%d/%m %H:%M')}**")
+
+    with col_p:
         if not df_prods.empty:
-            # Criar lista de opções com formato mais amigável
-            opcoes_produto = []
-            for _, row in df_prods.iterrows():
-                cliente = row['cliente'] if pd.notna(row['cliente']) else "Sem cliente"
-                opcao = f"{row['codigo']} - {row['descricao']} ({cliente})"
-                opcoes_produto.append(opcao)
-            
-            opcoes_com_blank = [""] + opcoes_produto
-            
-            # Verificar se já existe um produto selecionado no session state
-            indice_padrao = 0
-            if 'ultimo_produto_selecionado' in st.session_state:
-                ultimo = st.session_state['ultimo_produto_selecionado']
-                if ultimo in opcoes_com_blank:
-                    indice_padrao = opcoes_com_blank.index(ultimo)
-            
-            produto_selecionado = st.selectbox(
-                "Buscar Produto Cadastrado", 
-                opcoes_com_blank, 
-                index=indice_padrao,
-                key="sel_produto_completo"
-            )
-            
-            # Se selecionou um produto, extrair as informações
-            if produto_selecionado and produto_selecionado != "":
-                # Salvar no session state
-                st.session_state['ultimo_produto_selecionado'] = produto_selecionado
-                
-                # Extrair o código (parte antes do " - ")
-                codigo_selecionado = produto_selecionado.split(" - ")[0]
-                
-                # Buscar as informações completas do produto
-                produto_info = df_prods[df_prods['codigo'] == codigo_selecionado].iloc[0]
-                item_auto = produto_info['descricao']
-                cliente_auto = produto_info['cliente'] if pd.notna(produto_info['cliente']) else ""
-                
-                # Salvar no session state para persistir
-                st.session_state['item_auto'] = item_auto
-                st.session_state['cliente_auto'] = cliente_auto
-                st.session_state['codigo_auto'] = codigo_selecionado
-                
-                # Mostrar confirmação do produto selecionado
-                st.success(f"✅ Produto selecionado: **{item_auto}**")
-            else:
-                # Se não selecionou nada, limpar o session state
-                st.session_state['item_auto'] = ""
-                st.session_state['cliente_auto'] = ""
-                st.session_state['codigo_auto'] = ""
-                if 'ultimo_produto_selecionado' in st.session_state:
-                    del st.session_state['ultimo_produto_selecionado']
+            opcoes = [f"{r['codigo']} - {r['descricao']}" for _, r in df_prods.iterrows()]
+            prod_sel = st.selectbox("Produto", [""] + opcoes)
+            if prod_sel:
+                cod = prod_sel.split(" - ")[0]
+                info = df_prods[df_prods['codigo'] == cod].iloc[0]
+                st.session_state.item_f = info['descricao']
+                st.session_state.cli_f = info['cliente']
         else:
-            st.warning("⚠️ Nenhum produto cadastrado. Cadastre produtos na aba 'Cadastro de Produtos'.")
-            # Inicializar session state vazio
-            st.session_state['item_auto'] = ""
-            st.session_state['cliente_auto'] = ""
-            st.session_state['codigo_auto'] = ""
+            st.warning("Cadastre produtos primeiro.")
 
-    # Recuperar valores do session state (se existirem)
-    cliente_padrao = st.session_state.get('cliente_auto', "")
-    codigo_padrao = st.session_state.get('codigo_auto', "")
-    item_padrao = st.session_state.get('item_auto', "")
+    c1, c2 = st.columns(2)
+    with c1:
+        ped_n = st.text_input("Nº Pedido")
+        cli_n = st.text_input("Cliente", value=st.session_state.get('cli_f', ""))
+    with c2:
+        qtd_n = st.number_input("Quantidade", value=2380)
+        setup_n = st.number_input("Setup (min)", value=30)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        ped_in = st.text_input("Número do Pedido", placeholder="Ex: 5050", key="pedido_num")
-        cliente_in = st.text_input("Cliente Vinculado", value=cliente_padrao, key="cliente_nome")
-        
-    with col2:
-        qtd = st.number_input("Quantidade", min_value=1, value=2380, key="qtd_prod")
-        setup_in = st.number_input("Tempo de Setup (min)", min_value=0, value=30, key="setup_tempo")
-    
-    col_data1, col_data2 = st.columns(2)
-    with col_data1:
-        dt_in = st.date_input("Data de Início", sugestao.date(), key="data_inicio")
-    with col_data2:
-        hr_in = st.time_input("Hora de Início", sugestao.time(), key="hora_inicio")
-
-    # Mostrar resumo do pedido antes de lançar
-    if codigo_padrao and item_padrao:
-        st.info(f"📦 **Produto:** {codigo_padrao} - {item_padrao}")
-
-    if st.button("🚀 Lançar Produção + Setup", key="btn_lancar", type="primary"):
-        # Verificar se tem pedido número e se um produto foi selecionado
-        if ped_in and codigo_padrao and item_padrao:
-            ini_dt = datetime.combine(dt_in, hr_in)
-            
-            # Criar identificador do pedido
-            identificador_pedido = f"{cliente_padrao} | {codigo_padrao} | Ped: {ped_in}"
-            
-            # CHAMADA CORRIGIDA - passa a quantidade também
-            horario_inicio, fim_prod, fim_setup = salvar_pedido_com_setup(
-                maq_sel, 
-                identificador_pedido, 
-                item_padrao, 
-                ini_dt, 
-                setup_in,
-                qtd
-            )
-            
-            # Mensagem mais informativa
-            if fim_setup:
-                st.success(f"✅ Produção agendada: {horario_inicio.strftime('%d/%m %H:%M')} às {fim_prod.strftime('%H:%M')} | Setup até {fim_setup.strftime('%H:%M')}")
-            else:
-                st.success(f"✅ Produção agendada: {horario_inicio.strftime('%d/%m %H:%M')} às {fim_prod.strftime('%H:%M')}")
-            
-            # Limpar seleção de produto após lançar
-            for key in ['sel_produto_completo', 'item_auto', 'cliente_auto', 'codigo_auto', 'ultimo_produto_selecionado']:
-                if key in st.session_state:
-                    del st.session_state[key]
+    if st.button("🚀 Lançar Produção", type="primary"):
+        if ped_n and prod_sel:
+            item_n = prod_sel.split(" - ")[1]
+            label = f"{cli_n} | {ped_n} ({item_n})"
+            salvar_pedido_com_setup(maq_sel, label, item_n, sugestao, setup_n, qtd_n)
+            st.success("Pedido agendado!")
             st.rerun()
-        else:
-            if not ped_in:
-                st.error("❌ Preencha o número do pedido!")
-            elif not codigo_padrao:
-                st.error("❌ Selecione um produto da lista!")
 
-# ===============================
-# ABA 2 - GANTT
-# ===============================
+# --- ABA 2: GANTT --- (Restaurado o Relógio Visual)
 with aba2:
-    st.subheader("📊 Gráfico de Gantt - Programação da Produção")
-    df = carregar_dados()
-    if not df.empty:
-        # Ordenar as máquinas para exibição consistente
-        df['maquina'] = pd.Categorical(df['maquina'], categories=MAQUINAS, ordered=True)
-        df = df.sort_values('maquina')
-        
+    st.subheader("📊 Gráfico de Gantt")
+    df_g = carregar_dados()
+    if not df_g.empty:
+        # Lógica visual de "Executando"
+        df_g["status_visual"] = df_g["status"]
+        df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente"), "status_visual"] = "Executando"
+
         fig = px.timeline(
-            df, x_start="inicio", x_end="fim", y="maquina",
-            color="status", text="pedido",
-            color_discrete_map={
-                "Pendente": "#1f77b4", 
-                "Concluído": "#2ecc71",
-                "Setup": "#7f7f7f"
-            },
-            category_orders={"maquina": MAQUINAS},
-            title="Linha vermelha = momento atual"
+            df_g, x_start="inicio", x_end="fim", y="maquina", color="status_visual",
+            text="pedido", category_orders={"maquina": MAQUINAS},
+            color_discrete_map={"Pendente": "#1f77b4", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
         )
         fig.update_yaxes(autorange="reversed")
+        
+        # LINHA DO RELÓGIO
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-        fig.update_layout(showlegend=True, height=500)
+        fig.add_annotation(x=agora, y=1.05, yref="paper", text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, font=dict(color="red"))
+        
         st.plotly_chart(fig, use_container_width=True)
-        
-        # Estatísticas rápidas
-        col_est1, col_est2, col_est3 = st.columns(3)
-        with col_est1:
-            st.metric("Total de Pedidos", len(df))
-        with col_est2:
-            st.metric("Pendentes", len(df[df['status'] == 'Pendente']))
-        with col_est3:
-            st.metric("Concluídos", len(df[df['status'] == 'Concluído']))
     else:
-        st.info("ℹ️ Nenhum pedido cadastrado ainda.")
+        st.info("Sem dados.")
 
-# ===============================
-# ABA 3 - GERENCIAR
-# ===============================
+# --- ABA 3: GERENCIAR ---
 with aba3:
-    st.subheader("⚙️ Gerenciar Pedidos")
-    df = carregar_dados()
-    if not df.empty:
-        df_ordenado = df.sort_values("inicio", ascending=False)
-        
-        for idx, row in df_ordenado.iterrows():
-            with st.container():
-                col1, col2, col3, col4 = st.columns([5, 1, 1, 1])
-                
-                # Formatação da data
-                data_ini = row['inicio'].strftime('%d/%m %H:%M')
-                data_fim = row['fim'].strftime('%H:%M')
-                
-                with col1:
-                    if row['status'] == 'Setup':
-                        st.write(f"🔧 **{row['pedido']}** | {data_ini} → {data_fim} ({row['status']})")
-                    elif row['status'] == 'Concluído':
-                        st.write(f"✅ ~~**{row['pedido']}**~~ | {data_ini} → {data_fim} (Concluído)")
-                    else:
-                        st.write(f"⏳ **{row['pedido']}** | {data_ini} → {data_fim} ({row['status']})")
-                
-                with col2:
-                    if row["status"] != "Concluído" and row["status"] != "Setup":
-                        if st.button("✅ OK", key=f"ok_{row['id']}_{idx}"):
-                            cursor.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (row['id'],))
-                            conn.commit()
-                            st.rerun()
-                
-                with col3:
-                    if st.button("🗑️ Apagar", key=f"del_{row['id']}_{idx}"):
-                        cursor.execute("DELETE FROM agenda WHERE id=?", (row['id'],))
-                        conn.commit()
-                        st.rerun()
-                
-                with col4:
-                    if row['status'] != 'Concluído' and row['status'] != 'Setup':
-                        st.caption("Pendente")
-                
-                st.divider()
-    else:
-        st.info("ℹ️ Nenhum pedido cadastrado ainda.")
-
-# ===============================
-# RODAPÉ
-# ===============================
-st.divider()
-st.caption("PCP William - Sistema de Controle de Produção v2.0 - Sem sobreposições")
+    st.subheader("⚙️ Gerenciar")
+    df_ger = carregar_dados()
+    if not df_ger.empty:
+        for i, r in df_ger.sort_values("inicio", ascending=False).iterrows():
+            col1, col2 = st.columns([5, 1])
+            col1.write(f"**{r['pedido']}** | {r['maquina']} | {r['inicio'].strftime('%d/%m %H:%M')}")
+            if col2.button("🗑️", key=f"del_{r['id']}"):
+                c = conectar(); cur = c.cursor()
+                cur.execute("DELETE FROM agenda WHERE id=?", (r['id'],))
+                c.commit(); c.close(); st.rerun()

@@ -55,7 +55,7 @@ def carregar_dados():
         df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         df["rotulo_barra"] = df.apply(
-            lambda r: "🔧 SETUP" if r['status'] == "Setup" else f"📦 OP: {r['pedido']}<br>QTD: {int(r['qtd'])}", 
+            lambda r: "🔧 SETUP" if r['status'] == "Setup" else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}", 
             axis=1
         )
     return df
@@ -95,7 +95,7 @@ st.markdown(f"""
         <h1 style="color: white; margin: 0; font-size: 24px; font-family: 'Segoe UI', sans-serif;">
             📊 CRONOGRAMA DE MÁQUINAS <span style="color: #FF4B4B;">|</span> PCP INDUSTRIAL
         </h1>
-        <p style="color: #888; margin: 5px 0 0 0;">Usuário: {st.session_state.user_email}</p>
+        <p style="color: #888; margin: 5px 0 0 0;">👤 {st.session_state.user_email}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -105,7 +105,7 @@ st.markdown(f"""
 aba1, aba2, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "📊 Gantt Real-Time", "⚙️ Gerenciar", "📦 Catálogo", "📈 Cargas"])
 
 # ===============================
-# ABA 2 - GANTT (PRIMEIRO PARA TESTE)
+# ABA 2 - GANTT (RÉGUA CORRIGIDA - DATA A CADA 9 HORAS)
 # ===============================
 with aba2:
     df_g = carregar_dados()
@@ -130,31 +130,44 @@ with aba2:
             }
         )
 
-        # Configuração da régua
+        # CONFIGURAÇÃO DA RÉGUA - DATA a cada 9 horas
         fig.update_xaxes(
             type='date',
             range=[agora - timedelta(hours=2), agora + timedelta(hours=48)],
-            dtick=10800000,  # 3 horas
+            dtick=32400000,  # 9 horas em milissegundos (9 * 60 * 60 * 1000)
             tickformatstops=[
-                dict(dtickrange=[None, 10800000], value="%H:%M"),
-                dict(dtickrange=[10800001, None], value="%d/%m\n%H:%M")
+                # Para intervalos menores que 9 horas, mostra apenas HORA
+                dict(dtickrange=[None, 32400000], value="%H:%M"),
+                # Para intervalos de 9 horas ou mais, mostra DATA + HORA
+                dict(dtickrange=[32400001, None], value="%d/%m\n%H:%M")
             ],
+            tickformat="%H:%M",  # Formato padrão para ticks individuais
             gridcolor='rgba(255,255,255,0.1)',
-            showgrid=True
+            showgrid=True,
+            tickangle=0,  # Texto na horizontal
+            tickfont=dict(size=11)
         )
         
         fig.update_yaxes(autorange="reversed", title="")
+        
+        # LINHA VERMELHA DO MOMENTO ATUAL
         fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
         
+        # ANOTAÇÃO "AGORA"
         fig.add_annotation(
             x=agora, 
-            y=1.12, 
+            y=1.08, 
             text=f"🔴 AGORA: {agora.strftime('%d/%m %H:%M')}", 
             showarrow=False, 
             yref="paper", 
-            font=dict(color="#FF4B4B", size=16, family="Arial Black")
+            font=dict(color="#FF4B4B", size=14, family="Arial Black"),
+            bgcolor="rgba(0,0,0,0.7)",
+            bordercolor="#FF4B4B",
+            borderwidth=1,
+            borderpad=4
         )
         
+        # CONFIGURAÇÃO DAS BARRAS
         fig.update_traces(
             textposition='inside', 
             insidetextanchor='start',
@@ -162,13 +175,22 @@ with aba2:
             hovertemplate="<b>OP: %{customdata[0]}</b><br>Produto: %{customdata[2]}<br>Qtd: %{customdata[1]}<extra></extra>"
         )
         
+        # LAYOUT GERAL
         fig.update_layout(
             height=550,
             bargap=0.1,
             margin=dict(l=10, r=10, t=90, b=10),
-            legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center")
+            legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center"),
+            hovermode="x unified",
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
         )
+        
         st.plotly_chart(fig, use_container_width=True)
+        
+        # LEGENDA EXPLICATIVA
+        st.caption("📅 **Régua:** Data aparece a cada 9 horas (15:00, 00:00, 09:00, 18:00...) | 🔴 Linha vermelha = momento atual")
+        
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
@@ -397,4 +419,4 @@ col_r1, col_r2, col_r3 = st.columns(3)
 with col_r1:
     st.caption(f"🕒 Última atualização: {agora.strftime('%d/%m/%Y %H:%M:%S')}")
 with col_r3:
-    st.caption("🏭 PCP Industrial v2.0")
+    st.caption("🏭 PCP Industrial v2.0 - Régua 9h")

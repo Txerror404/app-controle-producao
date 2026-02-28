@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS produtos (
 conn.commit()
 
 # ===============================
-# FUNÇÕES
+# FUNÇÕES CORRIGIDAS (SEM SOBREPOSIÇÃO)
 # ===============================
 def carregar_dados():
     df = pd.read_sql_query("SELECT * FROM agenda", conn)
@@ -58,26 +58,81 @@ def carregar_produtos():
     return pd.read_sql_query("SELECT * FROM produtos", conn)
 
 def obter_proximo_horario_livre(maquina_nome):
+    """
+    Retorna o horário mais tarde entre:
+    - Agora
+    - Fim do último evento (produção ou setup) da máquina
+    """
     df = carregar_dados()
     if not df.empty:
-        df_maq = df[(df["maquina"] == maquina_nome) & (df["status"] != "Concluído")]
+        # Filtra apenas eventos desta máquina (todos os status, incluindo Setup)
+        df_maq = df[df["maquina"] == maquina_nome]
         if not df_maq.empty:
-            return df_maq["fim"].max()
+            # Pega o fim do último evento (pode ser produção ou setup)
+            ultimo_fim = df_maq["fim"].max()
+            # Retorna o maior entre agora e o fim do último evento
+            return max(agora, ultimo_fim)
     return agora
 
-def salvar_pedido_com_setup(maquina, pedido, item, inicio, fim_prod, minutos_setup):
+def salvar_pedido_com_setup(maquina, pedido, item, inicio_desejado, minutos_setup, qtd):
+    """
+    Agenda produção e setup respeitando a ordem cronológica:
+    1. Se houver tempo livre antes do início desejado, usa esse tempo
+    2. Produção começa no horário livre
+    3. Setup começa imediatamente após a produção
+    """
+    
+    # 1. ENCONTRAR O PRÓXIMO HORÁRIO LIVRE REAL
+    df = carregar_dados()
+    horario_livre = inicio_desejado
+    
+    if not df.empty:
+        # Pegar todos os eventos da máquina ordenados
+        df_maq = df[df["maquina"] == maquina].sort_values("inicio")
+        
+        if not df_maq.empty:
+            # Verificar se o horário desejado está livre
+            for _, row in df_maq.iterrows():
+                # Se o horário desejado está dentro de um bloco existente
+                if horario_livre < row["fim"] and horario_livre >= row["inicio"]:
+                    # Ajusta para depois do fim deste bloco
+                    horario_livre = row["fim"]
+                # Se o horário desejado está antes do próximo bloco, mantém
+    
+    # 2. CALCULAR TEMPO DE PRODUÇÃO
+    tempo_producao_horas = qtd / CADENCIA
+    fim_producao = horario_livre + timedelta(hours=tempo_producao_horas)
+    
+    # 3. INSERIR PRODUÇÃO
     cursor.execute("""
         INSERT INTO agenda (maquina, pedido, item, inicio, fim, status)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (maquina, pedido, item, inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), "Pendente"))
+    """, (
+        maquina, 
+        pedido, 
+        item, 
+        horario_livre.strftime('%Y-%m-%d %H:%M:%S'), 
+        fim_producao.strftime('%Y-%m-%d %H:%M:%S'), 
+        "Pendente"
+    ))
     
+    # 4. INSERIR SETUP (imediatamente após a produção)
     if minutos_setup > 0:
-        fim_setup = fim_prod + timedelta(minutes=minutos_setup)
+        fim_setup = fim_producao + timedelta(minutes=minutos_setup)
         cursor.execute("""
             INSERT INTO agenda (maquina, pedido, item, inicio, fim, status)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (maquina, f"SETUP - {pedido}", "Limpeza/Ajuste", fim_prod.strftime('%Y-%m-%d %H:%M:%S'), fim_setup.strftime('%Y-%m-%d %H:%M:%S'), "Setup"))
+        """, (
+            maquina, 
+            f"SETUP - {pedido}", 
+            "Limpeza/Ajuste", 
+            fim_producao.strftime('%Y-%m-%d %H:%M:%S'), 
+            fim_setup.strftime('%Y-%m-%d %H:%M:%S'), 
+            "Setup"
+        ))
+    
     conn.commit()
+    return horario_livre, fim_producao, fim_setup if minutos_setup > 0 else None
 
 # ===============================
 # INTERFACE
@@ -215,15 +270,13 @@ with aba1:
             st.session_state['codigo_auto'] = ""
 
     # Recuperar valores do session state (se existirem)
-    item_padrao = st.session_state.get('item_auto', "")
     cliente_padrao = st.session_state.get('cliente_auto', "")
     codigo_padrao = st.session_state.get('codigo_auto', "")
+    item_padrao = st.session_state.get('item_auto', "")
 
     col1, col2 = st.columns(2)
     with col1:
         ped_in = st.text_input("Número do Pedido", placeholder="Ex: 5050", key="pedido_num")
-        
-        # Cliente vinculado (agora na coluna 1)
         cliente_in = st.text_input("Cliente Vinculado", value=cliente_padrao, key="cliente_nome")
         
     with col2:
@@ -244,13 +297,25 @@ with aba1:
         # Verificar se tem pedido número e se um produto foi selecionado
         if ped_in and codigo_padrao and item_padrao:
             ini_dt = datetime.combine(dt_in, hr_in)
-            f_prod = ini_dt + timedelta(hours=qtd/CADENCIA)
             
-            # Identificador inclui Cliente e Código
+            # Criar identificador do pedido
             identificador_pedido = f"{cliente_padrao} | {codigo_padrao} | Ped: {ped_in}"
             
-            salvar_pedido_com_setup(maq_sel, identificador_pedido, item_padrao, ini_dt, f_prod, setup_in)
-            st.success("✅ Produção agendada com sucesso!")
+            # CHAMADA CORRIGIDA - passa a quantidade também
+            horario_inicio, fim_prod, fim_setup = salvar_pedido_com_setup(
+                maq_sel, 
+                identificador_pedido, 
+                item_padrao, 
+                ini_dt, 
+                setup_in,
+                qtd
+            )
+            
+            # Mensagem mais informativa
+            if fim_setup:
+                st.success(f"✅ Produção agendada: {horario_inicio.strftime('%d/%m %H:%M')} às {fim_prod.strftime('%H:%M')} | Setup até {fim_setup.strftime('%H:%M')}")
+            else:
+                st.success(f"✅ Produção agendada: {horario_inicio.strftime('%d/%m %H:%M')} às {fim_prod.strftime('%H:%M')}")
             
             # Limpar seleção de produto após lançar
             for key in ['sel_produto_completo', 'item_auto', 'cliente_auto', 'codigo_auto', 'ultimo_produto_selecionado']:
@@ -270,6 +335,10 @@ with aba2:
     st.subheader("📊 Gráfico de Gantt - Programação da Produção")
     df = carregar_dados()
     if not df.empty:
+        # Ordenar as máquinas para exibição consistente
+        df['maquina'] = pd.Categorical(df['maquina'], categories=MAQUINAS, ordered=True)
+        df = df.sort_values('maquina')
+        
         fig = px.timeline(
             df, x_start="inicio", x_end="fim", y="maquina",
             color="status", text="pedido",
@@ -347,4 +416,4 @@ with aba3:
 # RODAPÉ
 # ===============================
 st.divider()
-st.caption("PCP William - Sistema de Controle de Produção v1.0")
+st.caption("PCP William - Sistema de Controle de Produção v2.0 - Sem sobreposições")

@@ -11,13 +11,12 @@ from streamlit_autorefresh import st_autorefresh
 # ===============================
 st.set_page_config(page_title="PCP Industrial", layout="wide")
 
-# ATUALIZAÇÃO ALTERADA PARA 2 MINUTOS (120000 ms)
+# ATUALIZAÇÃO AUTOMÁTICA (2 MINUTOS)
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
 OPERACIONAL_EMAIL = "sarita@deco.com.br"
 
-# LISTAS DE MÁQUINAS
 MAQUINAS_SERIGRAFIA = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
 MAQUINAS_SOPRO = [f"Sopro {i:02d}" for i in range(1, 22)] 
 TODAS_MAQUINAS = MAQUINAS_SERIGRAFIA + MAQUINAS_SOPRO
@@ -27,7 +26,6 @@ CARGA_UNIDADE = 49504
 fuso_br = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(fuso_br).replace(tzinfo=None)
 
-# URL da sua planilha publicada
 GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
 if "auth_ok" not in st.session_state: st.session_state.auth_ok = False
@@ -50,33 +48,18 @@ with conectar() as conn:
         )
     """)
 
-# ===============================
-# CARREGAR PRODUTOS GOOGLE SHEETS
-# ===============================
 @st.cache_data(ttl=300)
 def carregar_produtos_google():
     try:
         df = pd.read_csv(GOOGLE_SHEETS_URL, sep=',', encoding='utf-8')
         df.columns = df.columns.str.strip()
-        if 'ID_ITEM' not in df.columns:
-            return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
-        
+        if 'ID_ITEM' not in df.columns: return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
         df['id_item'] = df['ID_ITEM'].astype(str).str.strip()
         df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip() if 'DESCRIÇÃO_1' in df.columns else ''
-        
-        if 'CLIENTE' in df.columns:
-            df['cliente'] = df['CLIENTE'].astype(str).str.strip().apply(lambda x: x if x and x != 'nan' else 'N/A')
-        else:
-            df['cliente'] = 'N/A'
-        
-        if 'QTD/CARGA' in df.columns:
-            df['qtd_carga'] = pd.to_numeric(df['QTD/CARGA'].astype(str).str.replace(',', '.'), errors='coerce').fillna(CARGA_UNIDADE)
-        else:
-            df['qtd_carga'] = CARGA_UNIDADE
-        
+        df['cliente'] = df['CLIENTE'].astype(str).str.strip().apply(lambda x: x if x and x != 'nan' else 'N/A') if 'CLIENTE' in df.columns else 'N/A'
+        df['qtd_carga'] = pd.to_numeric(df['QTD/CARGA'].astype(str).str.replace(',', '.'), errors='coerce').fillna(CARGA_UNIDADE)
         return df.fillna('N/A')
-    except Exception as e:
-        return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
+    except: return pd.DataFrame(columns=['id_item', 'descricao', 'cliente', 'qtd_carga'])
 
 if 'df_produtos' not in st.session_state:
     st.session_state.df_produtos = carregar_produtos_google()
@@ -84,27 +67,20 @@ if 'df_produtos' not in st.session_state:
 df_produtos = st.session_state.df_produtos
 
 def carregar_dados():
-    with conectar() as c:
-        df = pd.read_sql_query("SELECT * FROM agenda", c)
+    with conectar() as c: df = pd.read_sql_query("SELECT * FROM agenda", c)
     if not df.empty:
-        df["inicio"] = pd.to_datetime(df["inicio"])
-        df["fim"] = pd.to_datetime(df["fim"])
+        df["inicio"] = pd.to_datetime(df["inicio"]); df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
-        df["rotulo_barra"] = df.apply(
-            lambda r: "🔧 SETUP" if r['status'] == "Setup" else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}", 
-            axis=1
-        )
+        df["rotulo_barra"] = df.apply(lambda r: "🔧 SETUP" if r['status'] == "Setup" else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}", axis=1)
     return df
 
 def proximo_horario(maq):
     df = carregar_dados()
     if not df.empty:
         df_maq = df[(df["maquina"] == maq) & (df["status"].isin(["Pendente", "Setup"]))]
-        if not df_maq.empty:
-            return max(agora, df_maq["fim"].max())
+        if not df_maq.empty: return max(agora, df_maq["fim"].max())
     return agora
 
-# LOGIN
 if not st.session_state.auth_ok:
     st.markdown("<h1 style='text-align:center;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.5, 1])
@@ -112,37 +88,39 @@ if not st.session_state.auth_ok:
         email = st.text_input("E-mail autorizado:").lower().strip()
         if st.button("Acessar Sistema", use_container_width=True):
             if email in [ADMIN_EMAIL, OPERACIONAL_EMAIL]: 
-                st.session_state.auth_ok = True
-                st.session_state.user_email = email
-                st.rerun()
+                st.session_state.auth_ok = True; st.session_state.user_email = email; st.rerun()
             else: st.error("E-mail não autorizado.")
     st.stop()
 
 # ===============================
-# CABEÇALHO COM RELÓGIO AJUSTADO
+# CABEÇALHO COMPACTO (GANHO DE ESPAÇO)
 # ===============================
 st.markdown(f"""
-    <div style="background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <style>
+        .main .block-container {{ padding-top: 1rem; padding-bottom: 1rem; }}
+    </style>
+    <div style="background-color: #1E1E1E; padding: 10px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="color: white; margin: 0; font-size: 24px; font-family: 'Segoe UI', sans-serif;">
-                📊 CRONOGRAMA DE MÁQUINAS <span style="color: #FF4B4B;">|</span> PCP INDUSTRIAL
-            </h1>
-            <p style="color: #888; margin: 5px 0 0 0;">👤 {st.session_state.user_email}</p>
+            <h2 style="color: white; margin: 0; font-size: 20px; font-family: 'Segoe UI', sans-serif;">
+                📊 CRONOGRAMA DE MÁQUINAS <span style="color: #FF4B4B;">|</span> PCP
+            </h2>
+            <p style="color: #888; margin: 0; font-size: 12px;">👤 {st.session_state.user_email}</p>
         </div>
-        <div style="text-align: right; border: 1px solid #FF4B4B; padding: 5px 15px; border-radius: 5px; background-color: #0E1117;">
-            <h3 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 20px;">
+        <div style="text-align: right; border: 1px solid #FF4B4B; padding: 2px 12px; border-radius: 5px; background-color: #0E1117;">
+            <h3 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px;">
                 ⏰ {agora.strftime('%H:%M:%S')}
             </h3>
-            <p style="color: #888; margin: 0; font-size: 12px;">{agora.strftime('%d/%m/%Y')}</p>
+            <p style="color: #888; margin: 0; font-size: 10px;">{agora.strftime('%d/%m/%Y')}</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# ABAS
-aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar OP", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos (Google)", "📈 Cargas"])
+aba1, aba2, aba6, aba3, aba4, aba5 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
 
-# FUNÇÃO GANTT
-def plotar_gantt(lista_maquinas, height_grafico=500):
+# ===============================
+# FUNÇÃO GANTT COM AJUSTE DE RELÓGIO (AGORA NO EIXO X)
+# ===============================
+def plotar_gantt(lista_maquinas, height_grafico=500, espessura_barra=0.8):
     df_all = carregar_dados()
     if not df_all.empty:
         df_g = df_all[df_all["maquina"].isin(lista_maquinas)].copy()
@@ -155,102 +133,103 @@ def plotar_gantt(lista_maquinas, height_grafico=500):
                 category_orders={"maquina": lista_maquinas},
                 color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
             )
-            fig.update_xaxes(type='date', range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], dtick=10800000, tickformat="%d/%m\n%H:%M", gridcolor='rgba(255,255,255,0.1)', showgrid=True, tickfont=dict(size=10, color="white"))
+            
+            # Ajuste de Datas e Relógio no Eixo X (Conforme Imagem)
+            fig.update_xaxes(
+                type='date', 
+                range=[agora - timedelta(hours=2), agora + timedelta(hours=48)], 
+                dtick=10800000, # 3 horas
+                tickformat="%d/%m\n%H:%M", 
+                gridcolor='rgba(255,255,255,0.1)', 
+                showgrid=True, 
+                tickfont=dict(size=10, color="white")
+            )
+            
             fig.update_yaxes(autorange="reversed", title="")
+            
+            # Linha Vermelha de "AGORA"
             fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
-            fig.add_annotation(x=agora, y=1.15, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, yref="paper", font=dict(color="red", size=18))
-            fig.update_traces(textposition='inside', insidetextanchor='start', width=0.85)
-            fig.update_layout(height=height_grafico, margin=dict(l=10, r=10, t=100, b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+            
+            # Texto "AGORA" movido para baixo (conforme imagem)
+            fig.add_annotation(
+                x=agora, y=-0.08, # Posição abaixo do eixo X
+                text=f"AGORA: {agora.strftime('%H:%M')}", 
+                showarrow=False, 
+                xref="x", yref="paper", 
+                font=dict(color="red", size=14, family="Arial Black"),
+                bgcolor="rgba(0,0,0,0.8)"
+            )
+            
+            fig.update_traces(textposition='inside', insidetextanchor='start', width=espessura_barra)
+            
+            fig.update_layout(
+                height=height_grafico, 
+                margin=dict(l=10, r=10, t=30, b=60), # Margem superior reduzida, inferior aumentada para o texto "Agora"
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
             st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown("---")
-            atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
-            maqs_em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].unique()
-            ociosas = [m for m in lista_maquinas if m not in maqs_em_uso]
-            c1, c2, c3 = st.columns(3)
-            c1.metric("🚨 OPs ATRASADAS", f"{atrasadas}")
-            c2.metric("💤 MÁQUINAS OCIOSAS", f"{len(ociosas)}")
-            if ociosas: c3.warning(f"Sem carga: {len(ociosas)} máquinas")
-            else: c3.success("✅ Setor 100% Ocupado")
-        else: st.info("ℹ️ Nenhuma produção cadastrada.")
-    else: st.info("ℹ️ Banco de dados vazio.")
-
-# EXIBIÇÃO
 with aba2: 
-    plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=500)
+    plotar_gantt(MAQUINAS_SERIGRAFIA, height_grafico=450)
 
 with aba6: 
-    # ALTURA DO GRÁFICO DO SOPRO AUMENTADA PARA 1200 PARA MELHOR VISUALIZAÇÃO
-    plotar_gantt(MAQUINAS_SOPRO, height_grafico=1200)
+    # Reduzida espessura da barra (width=0.6) para caber as 21 máquinas melhor
+    plotar_gantt(MAQUINAS_SOPRO, height_grafico=1100, espessura_barra=0.6)
 
 with aba1:
     with st.container(border=True):
-        st.subheader("➕ Lançar Nova Ordem de Produção")
-        col1, col2 = st.columns(2)
-        with col1:
-            maquina_sel = st.selectbox("🏭 Máquina", TODAS_MAQUINAS, key="maq_lanc")
-            if not df_produtos.empty:
-                id_item_sel = st.selectbox("📌 ID_ITEM", df_produtos['id_item'].tolist(), key="id_item_lanc")
-                info = df_produtos[df_produtos['id_item'] == id_item_sel].iloc[0]
-                desc_auto = info.get('descricao', ''); cli_auto = info.get('cliente', 'N/A'); qtd_sug = info.get('qtd_carga', CARGA_UNIDADE)
-            else: id_item_sel = None; desc_auto = ""; cli_auto = "N/A"; qtd_sug = CARGA_UNIDADE
-        with col2:
-            op_num = st.text_input("🔢 Número da OP")
-            st.text_input("📝 DESCRIÇÃO", value=desc_auto, disabled=True)
-            st.text_input("👥 Cliente", value=cli_auto, disabled=True)
-        col3, col4, col5 = st.columns(3)
-        qtd = col3.number_input("📊 Quantidade", min_value=1, value=int(qtd_sug))
-        setup_min = col4.number_input("⏱️ Setup (min)", min_value=0, value=30)
+        st.subheader("➕ Lançar OP")
+        c1, c2 = st.columns(2)
+        with c1:
+            maquina_sel = st.selectbox("🏭 Máquina", TODAS_MAQUINAS)
+            id_item_sel = st.selectbox("📌 ID_ITEM", df_produtos['id_item'].tolist()) if not df_produtos.empty else None
+            info = df_produtos[df_produtos['id_item'] == id_item_sel].iloc[0] if id_item_sel else {}
+        with c2:
+            op_num = st.text_input("🔢 OP")
+            st.text_input("📝 DESC", value=info.get('descricao', ''), disabled=True)
+            st.text_input("👥 Cliente", value=info.get('cliente', 'N/A'), disabled=True)
+        
+        c3, c4, c5 = st.columns(3)
+        qtd = c3.number_input("📊 Qtd", min_value=1, value=int(info.get('qtd_carga', CARGA_UNIDADE)) if id_item_sel else CARGA_UNIDADE)
+        setup_min = c4.number_input("⏱️ Setup (min)", value=30)
         sugestao = proximo_horario(maquina_sel)
-        data_ini = col5.date_input("📅 Início", sugestao.date()); hora_ini = col5.time_input("⏰ Hora", sugestao.time())
-        if st.button("🚀 LANÇAR PRODUÇÃO", type="primary", use_container_width=True):
+        data_ini = c5.date_input("📅 Data", sugestao.date()); hora_ini = c5.time_input("⏰ Hora", sugestao.time())
+        
+        if st.button("🚀 LANÇAR", type="primary", use_container_width=True):
             if op_num and id_item_sel:
                 inicio = datetime.combine(data_ini, hora_ini); fim_prod = inicio + timedelta(hours=qtd/CADENCIA_PADRAO)
                 with conectar() as conn:
                     cur = conn.cursor()
-                    cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maquina_sel, f"{cli_auto} | OP:{op_num}", id_item_sel, inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd))
-                    if setup_min > 0: conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maquina_sel, f"SETUP OP:{op_num}", "Ajuste", fim_prod.strftime('%Y-%m-%d %H:%M:%S'), (fim_prod + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, cur.lastrowid))
+                    cur.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)", (maquina_sel, f"{info.get('cliente','N/A')} | {op_num}", id_item_sel, inicio.strftime('%Y-%m-%d %H:%M:%S'), fim_prod.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd))
+                    if setup_min > 0: conn.execute("INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)", (maquina_sel, f"SETUP {op_num}", "Ajuste", fim_prod.strftime('%Y-%m-%d %H:%M:%S'), (fim_prod + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, cur.lastrowid))
                     conn.commit()
-                st.success("✅ Lançado!"); st.rerun()
+                st.rerun()
 
 with aba3:
     st.subheader("⚙️ Gerenciar OPs")
     df_ger = carregar_dados()
     if not df_ger.empty:
-        producoes = df_ger[df_ger["status"] == "Pendente"].sort_values("inicio")
-        for _, prod in producoes.iterrows():
+        for _, prod in df_ger[df_ger["status"] == "Pendente"].sort_values("inicio").iterrows():
             with st.expander(f"📦 {prod['maquina']} | {prod['pedido']}"):
-                col_a, col_b, col_c = st.columns([3, 1, 1])
-                col_a.write(f"**Período:** {prod['inicio'].strftime('%d/%m %H:%M')} às {prod['fim'].strftime('%H:%M')} | **Qtd:** {int(prod['qtd'])} un")
-                if col_b.button("✅ Concluir", key=f"c_{prod['id']}"):
-                    with conectar() as c: 
-                        c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
-                        c.commit()
+                col_a, col_b = st.columns([4, 1])
+                col_a.write(f"Início: {prod['inicio'].strftime('%d/%m %H:%M')} | Qtd: {int(prod['qtd'])}")
+                if col_b.button("✅ Ok", key=f"ok_{prod['id']}"):
+                    with conectar() as c: c.execute("UPDATE agenda SET status='Concluído' WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
                     st.rerun()
-                if col_c.button("🗑️ Apagar", key=f"d_{prod['id']}"):
-                    with conectar() as c: 
-                        c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
-                        c.commit()
+                if col_b.button("🗑️ Sair", key=f"del_{prod['id']}"):
+                    with conectar() as c: c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id'])); c.commit()
                     st.rerun()
 
-with aba4:
-    st.subheader("📋 Catálogo Google Sheets")
-    st.dataframe(df_produtos, use_container_width=True)
+with aba4: st.dataframe(df_produtos, use_container_width=True)
 
 with aba5:
-    st.subheader(f"📈 Resumo de Cargas (Base: {CARGA_UNIDADE})")
     df_c = carregar_dados()
     if not df_c.empty:
         df_p = df_c[(df_c["status"] == "Pendente") & (df_c["qtd"] > 0)]
-        t1, t2 = st.tabs(["Setor Serigrafia", "Setor Sopro"])
-        with t1:
-            cols = st.columns(4)
-            for i, maq in enumerate(MAQUINAS_SERIGRAFIA):
-                t = df_p[df_p["maquina"] == maq]["qtd"].sum()
-                cols[i].metric(label=f"🏭 {maq.upper()}", value=f"{t / CARGA_UNIDADE:.1f} carg")
-        with t2:
-            st.metric("Volume Total Sopro", f"{df_p[df_p['maquina'].isin(MAQUINAS_SOPRO)]['qtd'].sum() / CARGA_UNIDADE:.1f} cargas")
-            st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
+        st.metric("Total Sopro (Cargas)", f"{df_p[df_p['maquina'].isin(MAQUINAS_SOPRO)]['qtd'].sum() / CARGA_UNIDADE:.1f}")
+        st.dataframe(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]], use_container_width=True)
 
 st.divider()
-st.caption(f"🕒 PCP Industrial v3.8 | Refresh: 2min | Atualizado: {agora.strftime('%H:%M:%S')}")
+st.caption(f"v3.9 | Refresh 2min | {agora.strftime('%H:%M:%S')}")

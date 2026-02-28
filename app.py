@@ -18,7 +18,7 @@ st_autorefresh(interval=5000, key="pcp_refresh")
 
 # Lista de e-mails autorizados
 EMAILS_AUTORIZADOS = [
-    "william@seuemail.com", 
+    "will@admin.com.br", 
     "admin@empresa.com",
     "producao@empresa.com"
 ]

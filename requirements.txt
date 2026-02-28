@@ -1,4 +1,7 @@
 streamlit
 pandas
 plotly
+sqlite3
 pytz
+openpyxl
+xlsxwriter

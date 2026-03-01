@@ -494,36 +494,116 @@ with aba3:
 
 with aba4:
     st.subheader("⚙️ Gerenciamento e Reprogramação")
+    
+    # Status count
+    df_count = carregar_dados()
+    if not df_count.empty:
+        pendentes = len(df_count[df_count["status"] == "Pendente"])
+        setups = len(df_count[df_count["status"] == "Setup"])
+        manutencoes = len(df_count[df_count["status"] == "Manutenção"])
+        st.caption(f"📊 **Resumo:** {pendentes} OPs programadas | {setups} Setups | {manutencoes} Manutenções")
+    
+    # Campo de pesquisa
+    search_term = st.text_input("🔍 Pesquisar OP Programada", 
+                                placeholder="Digite cliente, máquina, item ou número da OP...", 
+                                key="search_gerenciar")
+    
     df_ger = carregar_dados()
     if not df_ger.empty:
-        is_admin = st.session_state.user_email == ADMIN_EMAIL
-        for _, prod in df_ger[df_ger["status"].isin(["Pendente", "Setup", "Manutenção"])].sort_values("inicio").iterrows():
-            with st.expander(f"📌 {prod['maquina']} | {prod['pedido']}"):
-                col1, col2, col3 = st.columns([2, 2, 1.2])
+        # Filtrar APENAS OPs NÃO CONCLUÍDAS (programadas + em execução + setup + manutenção)
+        df_programadas = df_ger[df_ger["status"].isin(["Pendente", "Setup", "Manutenção"])].copy()
+        
+        if df_programadas.empty:
+            st.info("✅ Nenhuma OP programada no momento.")
+        else:
+            # Aplicar filtro de pesquisa se houver termo
+            if search_term:
+                search_term_lower = search_term.lower()
                 
-                if is_admin:
-                    n_data = col1.date_input("Nova Data", prod['inicio'].date(), key=f"d_{prod['id']}")
-                    n_hora = col2.time_input("Nova Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
-                    if st.button("💾 Salvar Novo Horário", key=f"s_{prod['id']}"):
-                        novo_i = datetime.combine(n_data, n_hora)
-                        novo_f = novo_i + (prod['fim'] - prod['inicio'])
-                        with conectar() as c:
-                            c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", 
-                                     (novo_i.strftime('%Y-%m-%d %H:%M:%S'), 
-                                      novo_f.strftime('%Y-%m-%d %H:%M:%S'), prod['id']))
-                            c.commit()
-                        st.rerun()
+                # Criar coluna auxiliar com número da OP (extraído do pedido)
+                df_programadas['op_numero_aux'] = df_programadas['pedido'].apply(
+                    lambda x: x.split('OP:')[-1] if 'OP:' in x else x
+                )
                 
-                if col3.button("✅ Finalizar OP", key=f"ok_{prod['id']}", use_container_width=True):
-                    with conectar() as c: 
-                        c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (prod['id'],))
-                        c.commit()
-                    st.rerun()
-                if col3.button("🗑️ Deletar", key=f"del_{prod['id']}", use_container_width=True):
-                    with conectar() as c: 
-                        c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
-                        c.commit()
-                    st.rerun()
+                df_filtrado = df_programadas[
+                    df_programadas["pedido"].str.lower().str.contains(search_term_lower, na=False) |
+                    df_programadas["maquina"].str.lower().str.contains(search_term_lower, na=False) |
+                    df_programadas["item"].str.lower().str.contains(search_term_lower, na=False) |
+                    df_programadas["op_numero_aux"].str.lower().str.contains(search_term_lower, na=False)
+                ].drop(columns=['op_numero_aux'])
+            else:
+                df_filtrado = df_programadas
+            
+            if df_filtrado.empty:
+                st.warning(f"Nenhuma OP programada encontrada para: '{search_term}'")
+            else:
+                st.success(f"🔎 **{len(df_filtrado)}** OPs programadas encontradas")
+                
+                # Ordenar por data de início (mais próximas primeiro)
+                df_filtrado = df_filtrado.sort_values("inicio")
+                
+                is_admin = st.session_state.user_email == ADMIN_EMAIL
+                for _, prod in df_filtrado.iterrows():
+                    # Definir emoji e cor do status
+                    status_emoji = {
+                        "Pendente": "📦",
+                        "Setup": "🔧",
+                        "Manutenção": "🔩"
+                    }.get(prod['status'], "📌")
+                    
+                    with st.expander(f"{status_emoji} {prod['maquina']} | {prod['pedido']} | {prod['inicio'].strftime('%d/%m %H:%M')}"):
+                        col1, col2, col3 = st.columns([2, 2, 1.2])
+                        
+                        with col1:
+                            st.write(f"**Item:** {prod['item']}")
+                            if prod['status'] == "Pendente":
+                                st.write(f"**QTD:** {int(prod['qtd'])} unidades")
+                        
+                        with col2:
+                            st.write(f"**Início:** {prod['inicio'].strftime('%d/%m %H:%M')}")
+                            st.write(f"**Fim:** {prod['fim'].strftime('%d/%m %H:%M')}")
+                        
+                        if is_admin:
+                            with col3:
+                                with st.popover("✏️ Reprogramar"):
+                                    st.markdown("### Alterar horário")
+                                    n_data = st.date_input("Nova Data", prod['inicio'].date(), key=f"d_{prod['id']}")
+                                    n_hora = st.time_input("Nova Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
+                                    
+                                    col_confirm1, col_confirm2 = st.columns(2)
+                                    with col_confirm1:
+                                        if st.button("✅ Confirmar", key=f"conf_{prod['id']}", use_container_width=True):
+                                            novo_i = datetime.combine(n_data, n_hora)
+                                            novo_f = novo_i + (prod['fim'] - prod['inicio'])
+                                            with conectar() as c:
+                                                c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", 
+                                                         (novo_i.strftime('%Y-%m-%d %H:%M:%S'), 
+                                                          novo_f.strftime('%Y-%m-%d %H:%M:%S'), prod['id']))
+                                                c.commit()
+                                            st.rerun()
+                                    with col_confirm2:
+                                        if st.button("❌ Cancelar", key=f"cancel_{prod['id']}", use_container_width=True):
+                                            st.rerun()
+                        
+                        # Botões de ação
+                        col_a, col_b, col_c = st.columns([1, 1, 1])
+                        
+                        with col_a:
+                            if st.button("✅ Finalizar", key=f"ok_{prod['id']}", use_container_width=True):
+                                with conectar() as c: 
+                                    c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (prod['id'],))
+                                    c.commit()
+                                st.rerun()
+                        
+                        with col_b:
+                            if is_admin:
+                                if st.button("🗑️ Deletar", key=f"del_{prod['id']}", use_container_width=True):
+                                    with conectar() as c: 
+                                        c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
+                                        c.commit()
+                                    st.rerun()
+    else:
+        st.info("ℹ️ Nenhuma produção cadastrada.")
 
 with aba5: 
     st.dataframe(df_produtos, use_container_width=True)

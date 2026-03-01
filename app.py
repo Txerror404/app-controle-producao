@@ -141,7 +141,7 @@ def renderizar_setor(lista_maquinas, altura=500):
     fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
     fig.update_xaxes(type='date', range=[agora - timedelta(hours=2), agora + timedelta(hours=36)], dtick=10800000, tickformat="%H:%M\n%d/%m")
     
-    fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=2)
+    fig.add_vline(x=agora, line_dash="dash", line_color="red", line_width=1, opacity=0.8)
     fig.add_annotation(x=agora, y=-0.30, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, xref="x", yref="paper", font=dict(color="red", size=13, family="Arial Black"), bgcolor="rgba(0,0,0,0.9)", bordercolor="red", borderpad=2)
 
     fig.update_layout(height=altura, margin=dict(l=10, r=10, t=50, b=100), bargap=0.01, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))

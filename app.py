@@ -340,7 +340,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
 # =================================================================
 # 5. ABAS E LÓGICA DE NEGÓCIO
 # =================================================================
-aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
+aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(["Lançar", "Serigrafia", "Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
 
 with aba1:
     with st.container(border=True):

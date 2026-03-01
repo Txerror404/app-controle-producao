@@ -16,7 +16,7 @@ ADMIN_EMAIL = "will@admin.com.br"
 OPERACIONAL_EMAIL = "sarita@deco.com.br"
 
 MAQUINAS_SERIGRAFIA = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
-MAQUINAS_SOPRO = [f"Sopro {i:02d}" for i in range(1, 22)] 
+MAQUINAS_SOPRO = [f"Sopro {i:02d}" for i in range(1, 17)] 
 TODAS_MAQUINAS = MAQUINAS_SERIGRAFIA + MAQUINAS_SOPRO
 
 CADENCIA_PADRAO = 2380

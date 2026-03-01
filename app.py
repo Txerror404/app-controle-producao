@@ -472,7 +472,6 @@ with aba3:
 
                 producao_id = cur.lastrowid
 
-                # Inserir setup se existir
                 if setup_min > 0:
                     fim_setup = fim_dt + timedelta(minutes=setup_min)
 

@@ -159,7 +159,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     df_g.loc[df_g["status"] == "Setup", "cor_barra"] = "Setup"
     df_g.loc[df_g["status"] == "Manutenção", "cor_barra"] = "Manutenção"
 
-       fig = px.timeline(
+    fig = px.timeline(
         df_g, x_start="inicio", x_end="fim", y="maquina", color="cor_barra", text="rotulo_barra",
         category_orders={"maquina": lista_maquinas},
         color_discrete_map={
@@ -170,17 +170,18 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "Atrasada": "#FF4B4B",
             "Manutenção": "#9b59b6"
         },
-        custom_data=["pedido", "item", "qtd"]
+        custom_data=["pedido", "item", "qtd", "inicio"]  # Passar início também
     )
     
-    # Personalizar o hover (tooltip) - USANDO x E x1
+    # Personalizar o hover (tooltip) - CÁLCULO DIRETO NO HOVER
     fig.update_traces(
         hovertemplate="<br>".join([
             "<b>📦 OP: %{customdata[0]}</b>",
             "🔧 <b>Item:</b> %{customdata[1]}",
             "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
-            "⏱️ <b>Início:</b> %{x|%d/%m %H:%M}",
-            "⏱️ <b>Término:</b> %{x1|%d/%m %H:%M}",
+            "⏱️ <b>Início programado:</b> %{x|%d/%m %H:%M}",
+            "⏱️ <b>Término programado:</b> %{x1|%d/%m %H:%M}",
+            "⚙️ <b>Cadência:</b> 2380 unid/hora",
             "<extra></extra>"
         ])
     )

@@ -537,4 +537,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v6.3 | PCP Industrial William | 16 Máquinas Sopro | Produção, Setup Manual e Manutenção")
+st.caption("v6.3 | Industrial By William | Serigrafia | Sopro | Produção, Setup Manual e Manutenção")

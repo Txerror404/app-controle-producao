@@ -419,6 +419,20 @@ with aba1:
             key="hora_lanc"
         )
 
+# ===============================
+# 🎨 ABA SERIGRAFIA
+# ===============================
+with aba2:
+    st.subheader("🎨 Cronograma - Serigrafia")
+    renderizar_setor(MAQUINAS_SERIGRAFIA, altura=500, pos_y_agora=-0.25)
+
+# ===============================
+# 🍼 ABA SOPRO
+# ===============================
+with aba3:
+    st.subheader("🍼 Cronograma - Sopro")
+    renderizar_setor(MAQUINAS_SOPRO, altura=700, pos_y_agora=-0.15)
+
         # ===============================
         # BOTÃO DE CONFIRMAÇÃO
         # ===============================

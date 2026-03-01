@@ -78,6 +78,9 @@ def carregar_dados():
         df["rotulo_barra"] = df.apply(lambda r: "🔧 SETUP" if r['status'] == "Setup" else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}", axis=1)
     return df
 
+# =================================================================
+# FUNÇÃO CORRIGIDA PARA EVITAR SOBREPOSIÇÃO
+# =================================================================
 def proximo_horario(maq):
     """
     Retorna o próximo horário livre para a máquina,
@@ -373,11 +376,18 @@ with aba1:
             qtd_lanc = st.number_input("📊 Quantidade Total", value=carga_sugerida, key="qtd_lanc")
 
         st.divider()
+        
         c3, c4, c5 = st.columns(3)
         setup_min = c3.number_input("⏱️ Tempo de Setup (min)", value=30, key="setup_lanc")
+        
+        # CÁLCULO DO PRÓXIMO HORÁRIO LIVRE (SEM SOBREPOSIÇÃO)
         sugestao_h = proximo_horario(maq_sel)
+        
+        # Mantendo os campos editáveis mas mostrando a sugestão
         data_ini = c4.date_input("📅 Data de Início", sugestao_h.date(), key="data_lanc")
         hora_ini = c5.time_input("⏰ Hora de Início", sugestao_h.time(), key="hora_lanc")
+        
+        st.caption(f"⏱️ Sugestão baseada no fim da última OP: **{sugestao_h.strftime('%d/%m %H:%M')}**")
 
         if st.button("🚀 CONFIRMAR E AGENDAR", type="primary", use_container_width=True):
             if op_num and item_sel:
@@ -394,11 +404,12 @@ with aba1:
                          "Pendente", qtd_lanc)
                     )
                     if setup_min > 0:
+                        fim_setup = fim_dt + timedelta(minutes=setup_min)
                         conn.execute(
                             "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
                             (maq_sel, f"SETUP {op_num}", "Ajuste",
                              fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                             (fim_dt + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'),
+                             fim_setup.strftime('%Y-%m-%d %H:%M:%S'),
                              "Setup", 0, cur.lastrowid)
                         )
                     conn.commit()
@@ -461,4 +472,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v6.0 | PCP Industrial William | 16 Máquinas Sopro | Sistema Completo")
+st.caption("v6.1 | PCP Industrial William | 16 Máquinas Sopro | Sem sobreposição de OPs")

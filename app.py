@@ -574,8 +574,12 @@ with aba4:
         col_f1, col_f2, col_f3 = st.columns(3)
         
         # Carregar lista de usuários únicos para filtro
+                # Carregar lista de usuários únicos para filtro (COM TRATAMENTO DE ERRO)
         df_temp = carregar_dados()
-        usuarios_lista = ['Todos'] + df_temp['criado_por'].dropna().unique().tolist() if not df_temp.empty else ['Todos']
+        if not df_temp.empty and 'criado_por' in df_temp.columns:
+            usuarios_lista = ['Todos'] + df_temp['criado_por'].dropna().unique().tolist()
+        else:
+            usuarios_lista = ['Todos']
         
         with col_f1:
             filtro_status = st.multiselect(

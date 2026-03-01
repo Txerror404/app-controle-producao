@@ -203,32 +203,47 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
-
-    # CARDS DE STATUS - Setup não entra na conta
-    st.markdown("### 📊 Status do Setor - Apenas OPs contam para atraso")
-    c1, c2, c3, c4 = st.columns(4)
     
-    # Cálculo de atrasadas: APENAS Pendente (exclui Setup)
-    atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"] == "Pendente")].shape[0]
-    em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente")]["maquina"].nunique()
-    total_setor = len(lista_maquinas)
+    # ============================================================
+    # CARDS DE STATUS DETALHADOS
+    # ============================================================
+    st.markdown("### 📊 Status do Setor")
     
-    # Card de OPs Atrasadas em VERMELHO se houver atrasos
-    if atrasadas > 0:
-        c1.markdown(f"""
-        <div style="background-color: #FF4B4B20; padding: 10px; border-radius: 10px; border-left: 5px solid #FF4B4B;">
-            <p style="color: #FF4B4B; margin: 0; font-size: 14px;">🚨 OPs Atrasadas</p>
-            <p style="color: #FF4B4B; margin: 0; font-size: 24px; font-weight: bold;">{atrasadas}</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Buscar OPs em execução no momento
+    ops_em_execucao = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente")]
+    
+    if not ops_em_execucao.empty:
+        st.markdown("#### 🔴 OPs em Execução Agora:")
+        
+        # Criar linhas com até 3 cards por linha
+        for i in range(0, len(ops_em_execucao), 3):
+            cols = st.columns(3)
+            for j in range(3):
+                if i + j < len(ops_em_execucao):
+                    op = ops_em_execucao.iloc[i + j]
+                    
+                    # Extrair informações do pedido (formato: "CLIENTE | OP:NUMERO")
+                    pedido_split = op['pedido'].split(' | ')
+                    cliente = pedido_split[0] if len(pedido_split) > 0 else "N/A"
+                    op_numero = pedido_split[1].replace('OP:', '') if len(pedido_split) > 1 else "N/A"
+                    
+                    with cols[j]:
+                        st.markdown(f"""
+                        <div style="background-color: #ff7f0e20; padding: 15px; border-radius: 10px; border-left: 5px solid #ff7f0e; margin-bottom: 15px;">
+                            <p style="color: #ff7f0e; margin: 0 0 5px 0; font-size: 14px; font-weight: bold;">🏭 {op['maquina']}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">Cliente:</span> {cliente}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">Item:</span> {op['item']}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">OP:</span> {op_numero}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">QTD:</span> {int(op['qtd'])}</p>
+                            <p style="color: #aaa; margin: 5px 0 0 0; font-size: 11px; border-top: 1px solid #ff7f0e50; padding-top: 5px;">
+                                {op['inicio'].strftime('%H:%M')} - {op['fim'].strftime('%H:%M')}
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
     else:
-        c1.metric("🚨 OPs Atrasadas", atrasadas)
+        st.info("⏸️ Nenhuma OP em execução no momento.")
     
-    c2.metric("⚙️ OPs em Execução", em_uso)
-    c3.metric("💤 Máquinas Livres", total_setor - em_uso)
-    c4.metric("📈 Taxa de Ocupação", f"{(em_uso/total_setor)*100:.1f}%")
     st.divider()
-
 # =================================================================
 # 5. ABAS E LÓGICA DE NEGÓCIO
 # =================================================================

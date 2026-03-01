@@ -150,7 +150,7 @@ fig.add_vline(
     opacity=0.8,
     yref="paper",  # <-- ADICIONADO PARA CONTROLAR ALTURA
     y0=0,          # <-- COMEÇA NO TOPO DO GRÁFICO
-    y1=-0.28       # <-- TERMINA NO "AGORA" (MESMO VALOR DA ANOTAÇÃO)
+    y1=-0.30       # <-- TERMINA NO "AGORA" (MESMO VALOR DA ANOTAÇÃO)
 )
     fig.add_annotation(x=agora, y=-0.30, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, xref="x", yref="paper", font=dict(color="red", size=13, family="Arial Black"), bgcolor="rgba(0,0,0,0.9)", bordercolor="red", borderpad=2)
 

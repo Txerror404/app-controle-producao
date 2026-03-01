@@ -12,8 +12,8 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="PCP Industrial - SISTEMA COMPLETO", layout="wide")
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 
-15  ADMIN_EMAIL = "will@admin.com.br"
-16  OPERACIONAL_EMAIL = ["sarita@will.com.br", "oneida@will.com.br"]
+ADMIN_EMAIL = "will@admin.com.br"
+OPERACIONAL_EMAIL = ["sarita@will.com.br", "oneida@will.com.br"]
 
 MAQUINAS_SERIGRAFIA = ["maquina 13001", "maquina 13002", "maquina 13003", "maquina 13004"]
 MAQUINAS_SOPRO = [f"Sopro {i:02d}" for i in range(1, 17)]  # 16 MÁQUINAS

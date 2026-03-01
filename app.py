@@ -170,7 +170,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "Atrasada": "#FF4B4B",
             "Manutenção": "#9b59b6"
         },
-        custom_data=["pedido", "item", "qtd", "inicio", "fim"]  # Dados personalizados para o hover
+        custom_data=["pedido", "item", "qtd"]
     )
     
     # Personalizar o hover (tooltip)
@@ -179,9 +179,9 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "<b>📦 OP: %{customdata[0]}</b>",
             "🔧 <b>Item:</b> %{customdata[1]}",
             "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
-            "⏱️ <b>Início:</b> %{customdata[3]|%d/%m %H:%M}",
-            "⏱️ <b>Término:</b> %{customdata[4]|%d/%m %H:%M}",
-            "<extra></extra>"  # Remove informações extras
+            "⏱️ <b>Início:</b> %{x|%d/%m %H:%M}",
+            "⏱️ <b>Término:</b> %{x1|%d/%m %H:%M}",
+            "<extra></extra>"
         ])
     )
 

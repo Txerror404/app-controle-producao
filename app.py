@@ -136,7 +136,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =================================================================
-# 4. GRÁFICOS E STATUS
+# 4. GRÁFICOS E STATUS (COM HOVER PERSONALIZADO)
 # =================================================================
 def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     df_all = carregar_dados()
@@ -168,8 +168,21 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "Setup": "#7f7f7f",
             "Executando": "#ff7f0e",
             "Atrasada": "#FF4B4B",
-            "Manutenção": "#9b59b6"  # ROXO para manutenção
-        }
+            "Manutenção": "#9b59b6"
+        },
+        custom_data=["pedido", "item", "qtd", "inicio", "fim"]  # Dados personalizados para o hover
+    )
+    
+    # Personalizar o hover (tooltip)
+    fig.update_traces(
+        hovertemplate="<br>".join([
+            "<b>📦 OP: %{customdata[0]}</b>",
+            "🔧 <b>Item:</b> %{customdata[1]}",
+            "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
+            "⏱️ <b>Início:</b> %{customdata[3]|%d/%m %H:%M}",
+            "⏱️ <b>Término:</b> %{customdata[4]|%d/%m %H:%M}",
+            "<extra></extra>"  # Remove informações extras
+        ])
     )
 
     fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)
@@ -340,7 +353,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
 # =================================================================
 # 5. ABAS E LÓGICA DE NEGÓCIO
 # =================================================================
-aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(["Lançar", "Serigrafia", "Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
+aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(["➕ Lançar", "🎨 Serigrafia", "🍼 Sopro", "⚙️ Gerenciar", "📋 Produtos", "📈 Cargas"])
 
 with aba1:
     with st.container(border=True):
@@ -617,4 +630,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v6.3 | Industrial By William | Serigrafia | Sopro | Produção, Setup Manual e Manutenção")
+st.caption("v6.4 | Industrial By William | Serigrafia | Sopro | Hover Personalizado | Pesquisa na Gerenciar")

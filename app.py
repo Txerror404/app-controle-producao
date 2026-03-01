@@ -381,21 +381,29 @@ with aba1:
         
         c3, c4, c5, c6 = st.columns(4)
         
-        # Tipo de parada
-        tipo_parada = c3.selectbox(
-            "🔧 Tipo de Parada", 
-            ["Produção Normal", "Setup Manual", "Manutenção Mecânica"],
-            key="tipo_parada"
+        # Tipo de lançamento
+        tipo_lancamento = c3.selectbox(
+            "📋 Tipo de Lançamento", 
+            ["Produção Normal (com setup automático)", "Apenas Setup Manual", "Apenas Manutenção"],
+            key="tipo_lancamento"
         )
         
-        # Tempo de parada (editável)
+        # Tempo de setup/manutenção (editável)
         minutos_parada = 0
-        if tipo_parada != "Produção Normal":
+        if tipo_lancamento != "Produção Normal (com setup automático)":
             minutos_parada = c4.number_input(
-                f"⏱️ Tempo de {tipo_parada} (min)", 
+                f"⏱️ Tempo de {tipo_lancamento.replace('Apenas ', '')} (min)", 
                 min_value=0, 
                 value=30, 
                 key="min_parada"
+            )
+        else:
+            # Setup automático da produção normal
+            minutos_parada = c4.number_input(
+                "⏱️ Tempo de Setup (min)", 
+                min_value=0, 
+                value=30, 
+                key="setup_auto"
             )
         
         # CÁLCULO DO PRÓXIMO HORÁRIO LIVRE
@@ -410,12 +418,13 @@ with aba1:
             if op_num and item_sel:
                 inicio_dt = datetime.combine(data_ini, hora_ini)
                 
-                # Se for produção normal
-                if tipo_parada == "Produção Normal":
+                # PRODUÇÃO NORMAL (com setup automático)
+                if tipo_lancamento == "Produção Normal (com setup automático)":
                     fim_dt = inicio_dt + timedelta(hours=qtd_lanc/CADENCIA_PADRAO)
                     
                     with conectar() as conn:
                         cur = conn.cursor()
+                        # Insere a PRODUÇÃO
                         cur.execute(
                             "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
                             (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel,
@@ -423,39 +432,52 @@ with aba1:
                              fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              "Pendente", qtd_lanc)
                         )
+                        producao_id = cur.lastrowid
+                        
+                        # Insere o SETUP automático após a produção
                         if minutos_parada > 0:
-                            fim_parada = fim_dt + timedelta(minutes=minutos_parada)
+                            fim_setup = fim_dt + timedelta(minutes=minutos_parada)
                             conn.execute(
                                 "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
                                 (maq_sel, f"SETUP {op_num}", "Ajuste",
                                  fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                                 fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
-                                 "Setup", 0, cur.lastrowid)
+                                 fim_setup.strftime('%Y-%m-%d %H:%M:%S'),
+                                 "Setup", 0, producao_id)
                             )
                         conn.commit()
-                    st.success("Produção lançada com sucesso!")
+                    st.success("Produção com setup automático lançada com sucesso!")
                 
-                # Se for Setup Manual ou Manutenção Mecânica
-                elif tipo_parada in ["Setup Manual", "Manutenção Mecânica"]:
+                # APENAS SETUP MANUAL (sem produção)
+                elif tipo_lancamento == "Apenas Setup Manual":
                     fim_parada = inicio_dt + timedelta(minutes=minutos_parada)
-                    
-                    # Definir status baseado no tipo
-                    if tipo_parada == "Setup Manual":
-                        status_parada = "Setup"
-                    else:  # Manutenção Mecânica
-                        status_parada = "Manutenção"
                     
                     with conectar() as conn:
                         cur = conn.cursor()
                         cur.execute(
                             "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                            (maq_sel, f"{tipo_parada} | {op_num}", item_sel,
+                            (maq_sel, f"SETUP MANUAL | {op_num}", item_sel,
                              inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
-                             status_parada, 0)
+                             "Setup", 0)
                         )
                         conn.commit()
-                    st.success(f"{tipo_parada} agendada com sucesso!")
+                    st.success("Setup manual agendado com sucesso!")
+                
+                # APENAS MANUTENÇÃO (sem produção)
+                elif tipo_lancamento == "Apenas Manutenção":
+                    fim_parada = inicio_dt + timedelta(minutes=minutos_parada)
+                    
+                    with conectar() as conn:
+                        cur = conn.cursor()
+                        cur.execute(
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                            (maq_sel, f"MANUTENÇÃO | {op_num}", item_sel,
+                             inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                             fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
+                             "Manutenção", 0)
+                        )
+                        conn.commit()
+                    st.success("Manutenção agendada com sucesso!")
                 
                 st.rerun()
             else:
@@ -515,4 +537,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v6.2 | PCP Industrial William | 16 Máquinas Sopro | Com Manutenção Mecânica (Roxo)")
+st.caption("v6.3 | PCP Industrial William | 16 Máquinas Sopro | Produção, Setup Manual e Manutenção")

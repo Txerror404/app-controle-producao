@@ -79,11 +79,19 @@ def carregar_dados():
     return df
 
 def proximo_horario(maq):
+    """
+    Retorna o próximo horário livre para a máquina,
+    considerando o fim da última OP (produção ou setup)
+    """
     df = carregar_dados()
     if not df.empty:
+        # Filtra apenas eventos desta máquina que não estão concluídos
         df_maq = df[(df["maquina"] == maq) & (df["status"].isin(["Pendente", "Setup"]))]
-        if not df_maq.empty: 
-            return max(agora, df_maq["fim"].max())
+        if not df_maq.empty:
+            # Pega o MAIOR fim (último evento)
+            ultimo_fim = df_maq["fim"].max()
+            # Retorna o maior entre agora e o fim do último evento
+            return max(agora, ultimo_fim)
     return agora
 
 # =================================================================

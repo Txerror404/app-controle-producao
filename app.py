@@ -209,6 +209,14 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     # ============================================================
     st.markdown("### 📊 Status do Setor")
     
+    # Função auxiliar para buscar descrição do produto pelo ID_ITEM
+    def get_descricao_produto(id_item):
+        if df_produtos is not None and not df_produtos.empty:
+            produto = df_produtos[df_produtos['id_item'] == id_item]
+            if not produto.empty:
+                return produto.iloc[0]['descricao']
+        return "Descrição não encontrada"
+    
     # 1. CARDS DE OPs EM EXECUÇÃO
     ops_em_execucao = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente")]
     
@@ -227,12 +235,16 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
                     cliente = pedido_split[0] if len(pedido_split) > 0 else "N/A"
                     op_numero = pedido_split[1].replace('OP:', '') if len(pedido_split) > 1 else "N/A"
                     
+                    # Buscar descrição do produto
+                    descricao_produto = get_descricao_produto(op['item'])
+                    
                     with cols[j]:
                         st.markdown(f"""
                         <div style="background-color: #ff7f0e20; padding: 15px; border-radius: 10px; border-left: 5px solid #ff7f0e; margin-bottom: 15px;">
                             <p style="color: #ff7f0e; margin: 0 0 5px 0; font-size: 14px; font-weight: bold;">🏭 {op['maquina']}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">Cliente:</span> {cliente}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">Item:</span> {op['item']}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">Descrição:</span> {descricao_produto}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">OP:</span> {op_numero}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #888;">QTD:</span> {int(op['qtd'])}</p>
                             <p style="color: #aaa; margin: 5px 0 0 0; font-size: 11px; border-top: 1px solid #ff7f0e50; padding-top: 5px;">
@@ -263,12 +275,16 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
                     cliente = pedido_split[0] if len(pedido_split) > 0 else "N/A"
                     op_numero = pedido_split[1].replace('OP:', '') if len(pedido_split) > 1 else "N/A"
                     
+                    # Buscar descrição do produto
+                    descricao_produto = get_descricao_produto(op['item'])
+                    
                     with cols[j]:
                         st.markdown(f"""
                         <div style="background-color: #FF4B4B20; padding: 15px; border-radius: 10px; border-left: 5px solid #FF4B4B; margin-bottom: 15px;">
                             <p style="color: #FF4B4B; margin: 0 0 5px 0; font-size: 14px; font-weight: bold;">🏭 {op['maquina']}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">Cliente:</span> {cliente}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">Item:</span> {op['item']}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">Descrição:</span> {descricao_produto}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">OP:</span> {op_numero}</p>
                             <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">QTD:</span> {int(op['qtd'])}</p>
                             <p style="color: #aaa; margin: 5px 0 0 0; font-size: 11px; border-top: 1px solid #FF4B4B50; padding-top: 5px;">
@@ -304,7 +320,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     c1, c2, c3, c4 = st.columns(4)
     
     atrasadas_count = len(ops_atrasadas)
-    em_uso_count = ops_em_execucao["maquina"].nunique()
+    em_uso_count = ops_em_execucao["maquina"].nunique() if not ops_em_execucao.empty else 0
     total_setor = len(lista_maquinas)
     total_ops = df_g[df_g["status"] == "Pendente"].shape[0]
     

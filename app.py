@@ -89,7 +89,7 @@ def proximo_horario(maq):
     df = carregar_dados()
     if not df.empty:
         # Filtra apenas eventos desta máquina que não estão concluídos
-        df_maq = df[(df["maquina"] == maq) & (df["status"].isin(["Pendente", "Setup"]))]
+        df_maq = df[(df["maquina"] == maq) & (df["status"].isin(["Pendente", "Setup", "Manutenção"]))]
         if not df_maq.empty:
             # Pega o MAIOR fim (último evento)
             ultimo_fim = df_maq["fim"].max()
@@ -157,6 +157,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     df_g["cor_barra"] = df_g["status_cor"]
     df_g.loc[(df_g["fim"] < agora) & (df_g["status"] == "Pendente"), "cor_barra"] = "Atrasada"
     df_g.loc[df_g["status"] == "Setup", "cor_barra"] = "Setup"
+    df_g.loc[df_g["status"] == "Manutenção", "cor_barra"] = "Manutenção"
 
     fig = px.timeline(
         df_g, x_start="inicio", x_end="fim", y="maquina", color="cor_barra", text="rotulo_barra",
@@ -166,7 +167,8 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "Concluído": "#2ecc71", 
             "Setup": "#7f7f7f",
             "Executando": "#ff7f0e",
-            "Atrasada": "#FF4B4B"
+            "Atrasada": "#FF4B4B",
+            "Manutenção": "#9b59b6"  # ROXO para manutenção
         }
     )
 
@@ -377,43 +379,84 @@ with aba1:
 
         st.divider()
         
-        c3, c4, c5 = st.columns(3)
-        setup_min = c3.number_input("⏱️ Tempo de Setup (min)", value=30, key="setup_lanc")
+        c3, c4, c5, c6 = st.columns(4)
         
-        # CÁLCULO DO PRÓXIMO HORÁRIO LIVRE (SEM SOBREPOSIÇÃO)
+        # Tipo de parada
+        tipo_parada = c3.selectbox(
+            "🔧 Tipo de Parada", 
+            ["Produção Normal", "Setup Manual", "Manutenção Mecânica"],
+            key="tipo_parada"
+        )
+        
+        # Tempo de parada (editável)
+        minutos_parada = 0
+        if tipo_parada != "Produção Normal":
+            minutos_parada = c4.number_input(
+                f"⏱️ Tempo de {tipo_parada} (min)", 
+                min_value=0, 
+                value=30, 
+                key="min_parada"
+            )
+        
+        # CÁLCULO DO PRÓXIMO HORÁRIO LIVRE
         sugestao_h = proximo_horario(maq_sel)
         
-        # Mantendo os campos editáveis mas mostrando a sugestão
-        data_ini = c4.date_input("📅 Data de Início", sugestao_h.date(), key="data_lanc")
-        hora_ini = c5.time_input("⏰ Hora de Início", sugestao_h.time(), key="hora_lanc")
+        data_ini = c5.date_input("📅 Data de Início", sugestao_h.date(), key="data_lanc")
+        hora_ini = c6.time_input("⏰ Hora de Início", sugestao_h.time(), key="hora_lanc")
         
         st.caption(f"⏱️ Sugestão baseada no fim da última OP: **{sugestao_h.strftime('%d/%m %H:%M')}**")
 
         if st.button("🚀 CONFIRMAR E AGENDAR", type="primary", use_container_width=True):
             if op_num and item_sel:
                 inicio_dt = datetime.combine(data_ini, hora_ini)
-                fim_dt = inicio_dt + timedelta(hours=qtd_lanc/CADENCIA_PADRAO)
-
-                with conectar() as conn:
-                    cur = conn.cursor()
-                    cur.execute(
-                        "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                        (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel,
-                         inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                         fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                         "Pendente", qtd_lanc)
-                    )
-                    if setup_min > 0:
-                        fim_setup = fim_dt + timedelta(minutes=setup_min)
-                        conn.execute(
-                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
-                            (maq_sel, f"SETUP {op_num}", "Ajuste",
+                
+                # Se for produção normal
+                if tipo_parada == "Produção Normal":
+                    fim_dt = inicio_dt + timedelta(hours=qtd_lanc/CADENCIA_PADRAO)
+                    
+                    with conectar() as conn:
+                        cur = conn.cursor()
+                        cur.execute(
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                            (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel,
+                             inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                             fim_setup.strftime('%Y-%m-%d %H:%M:%S'),
-                             "Setup", 0, cur.lastrowid)
+                             "Pendente", qtd_lanc)
                         )
-                    conn.commit()
-                st.success("Lançamento concluído com sucesso!")
+                        if minutos_parada > 0:
+                            fim_parada = fim_dt + timedelta(minutes=minutos_parada)
+                            conn.execute(
+                                "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
+                                (maq_sel, f"SETUP {op_num}", "Ajuste",
+                                 fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                                 fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
+                                 "Setup", 0, cur.lastrowid)
+                            )
+                        conn.commit()
+                    st.success("Produção lançada com sucesso!")
+                
+                # Se for Setup Manual ou Manutenção Mecânica
+                elif tipo_parada in ["Setup Manual", "Manutenção Mecânica"]:
+                    fim_parada = inicio_dt + timedelta(minutes=minutos_parada)
+                    
+                    # Definir status baseado no tipo
+                    if tipo_parada == "Setup Manual":
+                        status_parada = "Setup"
+                    else:  # Manutenção Mecânica
+                        status_parada = "Manutenção"
+                    
+                    with conectar() as conn:
+                        cur = conn.cursor()
+                        cur.execute(
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                            (maq_sel, f"{tipo_parada} | {op_num}", item_sel,
+                             inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                             fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
+                             status_parada, 0)
+                        )
+                        conn.commit()
+                    st.success(f"{tipo_parada} agendada com sucesso!")
+                
                 st.rerun()
             else:
                 if not op_num:
@@ -432,7 +475,7 @@ with aba4:
     df_ger = carregar_dados()
     if not df_ger.empty:
         is_admin = st.session_state.user_email == ADMIN_EMAIL
-        for _, prod in df_ger[df_ger["status"].isin(["Pendente", "Setup"])].sort_values("inicio").iterrows():
+        for _, prod in df_ger[df_ger["status"].isin(["Pendente", "Setup", "Manutenção"])].sort_values("inicio").iterrows():
             with st.expander(f"📌 {prod['maquina']} | {prod['pedido']}"):
                 col1, col2, col3 = st.columns([2, 2, 1.2])
                 
@@ -472,4 +515,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v6.1 | PCP Industrial William | 16 Máquinas Sopro | Sem sobreposição de OPs")
+st.caption("v6.2 | PCP Industrial William | 16 Máquinas Sopro | Com Manutenção Mecânica (Roxo)")

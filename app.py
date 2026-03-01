@@ -139,25 +139,49 @@ def renderizar_setor(lista_maquinas, altura=500):
 
     fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)
     fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
-    fig.update_xaxes(type='date', range=[agora - timedelta(hours=2), agora + timedelta(hours=36)], dtick=10800000, tickformat="%H:%M\n%d/%m")
     
-   # LINHA VERMELHA ESTICADA ATÉ O "AGORA"
-fig.add_vline(
-    x=agora, 
-    line_dash="dash", 
-    line_color="red", 
-    line_width=1,
-    opacity=0.8,
-    yref="paper",  # <-- ADICIONADO PARA CONTROLAR ALTURA
-    y0=0,          # <-- COMEÇA NO TOPO DO GRÁFICO
-    y1=-0.30       # <-- TERMINA NO "AGORA" (MESMO VALOR DA ANOTAÇÃO)
-)
-    fig.add_annotation(x=agora, y=-0.30, text=f"AGORA: {agora.strftime('%H:%M')}", showarrow=False, xref="x", yref="paper", font=dict(color="red", size=13, family="Arial Black"), bgcolor="rgba(0,0,0,0.9)", bordercolor="red", borderpad=2)
+    # RÉGUA COM DATA E HORA
+    fig.update_xaxes(
+        type='date', 
+        range=[agora - timedelta(hours=2), agora + timedelta(hours=36)], 
+        dtick=10800000, 
+        tickformat="%H:%M\n%d/%m",
+        gridcolor='rgba(255,255,255,0.1)',
+        showgrid=True,
+        tickangle=0,
+        tickfont=dict(size=11)
+    )
+    
+    # LINHA VERMELHA ESTICADA ATÉ O "AGORA" (y=-0.30)
+    fig.add_vline(
+        x=agora, 
+        line_dash="dash", 
+        line_color="red", 
+        line_width=1,
+        opacity=0.8,
+        yref="paper",
+        y0=1,        # COMEÇA NO TOPO DO GRÁFICO
+        y1=-0.30     # TERMINA NA ALTURA DO "AGORA"
+    )
+    
+    # ANOTAÇÃO "AGORA" (corrigida a indentação)
+    fig.add_annotation(
+        x=agora, 
+        y=-0.30, 
+        text=f"AGORA: {agora.strftime('%H:%M')}", 
+        showarrow=False, 
+        xref="x", 
+        yref="paper", 
+        font=dict(color="red", size=13, family="Arial Black"), 
+        bgcolor="rgba(0,0,0,0.9)", 
+        bordercolor="red", 
+        borderpad=2
+    )
 
     fig.update_layout(height=altura, margin=dict(l=10, r=10, t=50, b=100), bargap=0.01, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
 
-    # CARDS DE STATUS ABAIXO DO GRÁFICO
+    # CARDS DE STATUS
     st.markdown("### 📊 Status do Setor")
     c1, c2, c3, c4 = st.columns(4)
     atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]

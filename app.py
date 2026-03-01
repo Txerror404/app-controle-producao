@@ -209,7 +209,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     # ============================================================
     st.markdown("### 📊 Status do Setor")
     
-    # Buscar OPs em execução no momento
+    # 1. CARDS DE OPs EM EXECUÇÃO
     ops_em_execucao = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente")]
     
     if not ops_em_execucao.empty:
@@ -240,9 +240,78 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
+        st.divider()
     else:
         st.info("⏸️ Nenhuma OP em execução no momento.")
+        st.divider()
     
+    # 2. CARDS DE OPs ATRASADAS
+    ops_atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"] == "Pendente")]
+    
+    if not ops_atrasadas.empty:
+        st.markdown("#### 🚨 OPs ATRASADAS")
+        
+        # Criar linhas com até 3 cards por linha
+        for i in range(0, len(ops_atrasadas), 3):
+            cols = st.columns(3)
+            for j in range(3):
+                if i + j < len(ops_atrasadas):
+                    op = ops_atrasadas.iloc[i + j]
+                    
+                    # Extrair informações do pedido
+                    pedido_split = op['pedido'].split(' | ')
+                    cliente = pedido_split[0] if len(pedido_split) > 0 else "N/A"
+                    op_numero = pedido_split[1].replace('OP:', '') if len(pedido_split) > 1 else "N/A"
+                    
+                    with cols[j]:
+                        st.markdown(f"""
+                        <div style="background-color: #FF4B4B20; padding: 15px; border-radius: 10px; border-left: 5px solid #FF4B4B; margin-bottom: 15px;">
+                            <p style="color: #FF4B4B; margin: 0 0 5px 0; font-size: 14px; font-weight: bold;">🏭 {op['maquina']}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">Cliente:</span> {cliente}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">Item:</span> {op['item']}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">OP:</span> {op_numero}</p>
+                            <p style="color: white; margin: 0; font-size: 13px;"><span style="color: #FF4B4B;">QTD:</span> {int(op['qtd'])}</p>
+                            <p style="color: #aaa; margin: 5px 0 0 0; font-size: 11px; border-top: 1px solid #FF4B4B50; padding-top: 5px;">
+                                Deveria ter terminado: {op['fim'].strftime('%d/%m %H:%M')}
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+        st.divider()
+    
+    # 3. MÁQUINAS SEM PROGRAMAÇÃO
+    maquinas_com_op = df_g[df_g["status"] == "Pendente"]["maquina"].unique()
+    maquinas_sem_programacao = [m for m in lista_maquinas if m not in maquinas_com_op]
+    
+    if maquinas_sem_programacao:
+        st.markdown("#### 💤 Máquinas sem Programação")
+        
+        # Criar linhas com até 4 cards por linha
+        for i in range(0, len(maquinas_sem_programacao), 4):
+            cols = st.columns(4)
+            for j in range(4):
+                if i + j < len(maquinas_sem_programacao):
+                    with cols[j]:
+                        st.markdown(f"""
+                        <div style="background-color: #7f7f7f20; padding: 10px; border-radius: 10px; border-left: 5px solid #7f7f7f; text-align: center;">
+                            <p style="color: #7f7f7f; margin: 0; font-size: 14px; font-weight: bold;">🏭 {maquinas_sem_programacao[i+j]}</p>
+                            <p style="color: #aaa; margin: 0; font-size: 11px;">Sem OP programada</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+        st.divider()
+    
+    # 4. MÉTRICAS GERAIS (CARDS PEQUENOS)
+    st.markdown("#### 📊 Métricas Gerais")
+    c1, c2, c3, c4 = st.columns(4)
+    
+    atrasadas_count = len(ops_atrasadas)
+    em_uso_count = ops_em_execucao["maquina"].nunique()
+    total_setor = len(lista_maquinas)
+    total_ops = df_g[df_g["status"] == "Pendente"].shape[0]
+    
+    c1.metric("🚨 OPs Atrasadas", atrasadas_count)
+    c2.metric("⚙️ OPs em Execução", em_uso_count)
+    c3.metric("📦 Total OPs Pendentes", total_ops)
+    c4.metric("📈 Taxa de Ocupação", f"{(em_uso_count/total_setor)*100:.1f}%" if total_setor > 0 else "0%")
     st.divider()
 # =================================================================
 # 5. ABAS E LÓGICA DE NEGÓCIO

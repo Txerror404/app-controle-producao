@@ -120,9 +120,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =================================================================
-# 4. GRÁFICOS E STATUS
+# 4. GRÁFICOS E STATUS (FUNÇÃO CORRIGIDA)
 # =================================================================
-def renderizar_setor(lista_maquinas, altura=500):
+def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     df_all = carregar_dados()
     if df_all.empty:
         st.info("Nenhuma OP agendada.")
@@ -157,7 +157,7 @@ def renderizar_setor(lista_maquinas, altura=500):
         tickfont=dict(size=11)
     )
     
-    # LINHA VERMELHA
+    # LINHA VERMELHA (usa pos_y_agora)
     fig.add_vline(
         x=agora, 
         line_dash="dash", 
@@ -166,13 +166,13 @@ def renderizar_setor(lista_maquinas, altura=500):
         opacity=0.8,
         yref="paper",
         y0=1,
-        y1=-0.30
+        y1=pos_y_agora
     )
     
-    # ANOTAÇÃO "AGORA"
+    # ANOTAÇÃO "AGORA" (usa pos_y_agora)
     fig.add_annotation(
         x=agora, 
-        y=-0.30, 
+        y=pos_y_agora, 
         text=f"AGORA: {agora.strftime('%H:%M')}", 
         showarrow=False, 
         xref="x", 
@@ -256,11 +256,12 @@ with aba1:
                 st.success("Lançamento concluído com sucesso!")
                 st.rerun()
 
+# CHAMADAS DOS SETORES COM POSIÇÕES DIFERENTES
 with aba2: 
-    renderizar_setor(MAQUINAS_SERIGRAFIA, 450)
+    renderizar_setor(MAQUINAS_SERIGRAFIA, 450, -0.30)
 
 with aba3: 
-    renderizar_setor(MAQUINAS_SOPRO, 750)
+    renderizar_setor(MAQUINAS_SOPRO, 750, -0.45)
 
 with aba4:
     st.subheader("⚙️ Gerenciamento e Reprogramação")
@@ -307,4 +308,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v5.9 | PCP Industrial William | 16 Máquinas Sopro | Atualização em tempo real ativa")
+st.caption("v6.0 | PCP Industrial William | 16 Máquinas Sopro | AGORA com posição ajustada")

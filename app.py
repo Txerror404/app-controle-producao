@@ -149,7 +149,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         st.info("Sem dados para este setor.")
         return
 
-    # Status para cores
+        # Status para cores
     df_g["status_cor"] = df_g["status"]
     df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente"), "status_cor"] = "Executando"
     
@@ -159,8 +159,17 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     df_g.loc[df_g["status"] == "Setup", "cor_barra"] = "Setup"
     df_g.loc[df_g["status"] == "Manutenção", "cor_barra"] = "Manutenção"
 
+    # FORMATAR DATAS PARA O HOVER (SOLUÇÃO CORRIGIDA)
+    df_g["fim_formatado"] = df_g["fim"].dt.strftime('%d/%m %H:%M')
+    df_g["ini_formatado"] = df_g["inicio"].dt.strftime('%d/%m %H:%M')
+
     fig = px.timeline(
-        df_g, x_start="inicio", x_end="fim", y="maquina", color="cor_barra", text="rotulo_barra",
+        df_g, 
+        x_start="inicio", 
+        x_end="fim", 
+        y="maquina", 
+        color="cor_barra", 
+        text="rotulo_barra",
         category_orders={"maquina": lista_maquinas},
         color_discrete_map={
             "Pendente": "#3498db", 
@@ -170,17 +179,17 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "Atrasada": "#FF4B4B",
             "Manutenção": "#9b59b6"
         },
-        custom_data=["pedido", "item", "qtd", "inicio"]  # Passar início também
+        custom_data=["pedido", "item", "qtd", "ini_formatado", "fim_formatado"]
     )
     
-    # Personalizar o hover (tooltip) - CÁLCULO DIRETO NO HOVER
+    # Personalizar o hover (tooltip)
     fig.update_traces(
         hovertemplate="<br>".join([
             "<b>📦 OP: %{customdata[0]}</b>",
             "🔧 <b>Item:</b> %{customdata[1]}",
             "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
-            "⏱️ <b>Início programado:</b> %{x|%d/%m %H:%M}",
-            "⏱️ <b>Término programado:</b> %{x1|%d/%m %H:%M}",
+            "⏱️ <b>Início programado:</b> %{customdata[3]}",
+            "⏱️ <b>Término programado:</b> %{customdata[4]}",
             "⚙️ <b>Cadência:</b> 2380 unid/hora",
             "<extra></extra>"
         ])

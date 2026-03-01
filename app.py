@@ -145,7 +145,6 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)
     fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
     
-    # RÉGUA COM DATA E HORA
     fig.update_xaxes(
         type='date', 
         range=[agora - timedelta(hours=2), agora + timedelta(hours=36)], 
@@ -157,7 +156,6 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         tickfont=dict(size=11)
     )
     
-    # LINHA VERMELHA (usa pos_y_agora)
     fig.add_vline(
         x=agora, 
         line_dash="dash", 
@@ -169,7 +167,6 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         y1=pos_y_agora
     )
     
-    # ANOTAÇÃO "AGORA" (usa pos_y_agora)
     fig.add_annotation(
         x=agora, 
         y=pos_y_agora, 
@@ -191,14 +188,25 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
 
-    # CARDS DE STATUS
-    st.markdown("### 📊 Status do Setor")
+    # CARDS DE STATUS COM DESTAQUE VERMELHO
+    st.markdown("### 📊 Status do Setor - OPs atrasadas em vermelho")
     c1, c2, c3, c4 = st.columns(4)
+    
     atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
     em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].nunique()
     total_setor = len(lista_maquinas)
     
-    c1.metric("🚨 OPs Atrasadas", atrasadas)
+    # Card de OPs Atrasadas em VERMELHO se houver atrasos
+    if atrasadas > 0:
+        c1.markdown(f"""
+        <div style="background-color: #FF4B4B20; padding: 10px; border-radius: 10px; border-left: 5px solid #FF4B4B;">
+            <p style="color: #FF4B4B; margin: 0; font-size: 14px;">🚨 OPs Atrasadas</p>
+            <p style="color: #FF4B4B; margin: 0; font-size: 24px; font-weight: bold;">{atrasadas}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        c1.metric("🚨 OPs Atrasadas", atrasadas)
+    
     c2.metric("⚙️ Máquinas em Uso", em_uso)
     c3.metric("💤 Máquinas Livres", total_setor - em_uso)
     c4.metric("📈 Taxa de Ocupação", f"{(em_uso/total_setor)*100:.1f}%")

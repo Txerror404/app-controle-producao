@@ -674,7 +674,7 @@ with aba4:
                         status_prazo = f"🟢 Em {dias_para_inicio} dias"
                         cor_prazo = "green"
                     
-                    with st.expander(f"{status_emoji} {prod['maquina']} | {prod['pedido']} | <span style='color:{cor_prazo}'>{status_prazo}</span>", unsafe_allow_html=True):
+                    with st.expander(f"{status_emoji} {prod['maquina']} | {prod['pedido']} | {status_prazo}"):
                         
                         # METADADOS DA OP (COM VERIFICAÇÃO DE EXISTÊNCIA)
                         st.markdown("#### 📋 Metadados")

@@ -170,21 +170,21 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "Atrasada": "#FF4B4B",
             "Manutenção": "#9b59b6"
         },
-        custom_data=["pedido", "item", "qtd"]
+        custom_data=["pedido", "item", "qtd", "inicio"]  # Passar início também
     )
     
-    # Personalizar o hover (tooltip)
+    # Personalizar o hover (tooltip) - CÁLCULO DIRETO NO HOVER
     fig.update_traces(
         hovertemplate="<br>".join([
             "<b>📦 OP: %{customdata[0]}</b>",
             "🔧 <b>Item:</b> %{customdata[1]}",
             "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
-            "⏱️ <b>Início:</b> %{x|%d/%m %H:%M}",
-            "⏱️ <b>Término:</b> %{x1|%d/%m %H:%M}",
+            "⏱️ <b>Início programado:</b> %{x|%d/%m %H:%M}",
+            "⏱️ <b>Término programado:</b> %{x1|%d/%m %H:%M}",
+            "⚙️ <b>Cadência:</b> 2380 unid/hora",
             "<extra></extra>"
         ])
     )
-
     fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)
     fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
     

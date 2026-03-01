@@ -39,7 +39,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =================================================================
-# 2. BANCO DE DADOS E CARREGAMENTO (ATUALIZADO COM METADADOS)
+# 2. BANCO DE DADOS E CARREGAMENTO (COM MIGRAÇÃO AUTOMÁTICA)
 # =================================================================
 def conectar(): 
     return sqlite3.connect("pcp.db", check_same_thread=False)
@@ -573,13 +573,11 @@ with aba4:
     with st.expander("🔍 Filtros Avançados", expanded=False):
         col_f1, col_f2, col_f3 = st.columns(3)
         
-        # Carregar lista de usuários únicos para filtro
-                # Carregar lista de usuários únicos para filtro (COM TRATAMENTO DE ERRO)
+        # Carregar lista de usuários únicos para filtro (COM TRATAMENTO DE ERRO)
         df_temp = carregar_dados()
+        usuarios_lista = ['Todos']
         if not df_temp.empty and 'criado_por' in df_temp.columns:
             usuarios_lista = ['Todos'] + df_temp['criado_por'].dropna().unique().tolist()
-        else:
-            usuarios_lista = ['Todos']
         
         with col_f1:
             filtro_status = st.multiselect(
@@ -623,8 +621,8 @@ with aba4:
             else:
                 df_filtrado = df_programadas
             
-            # Aplicar filtro de usuário
-            if filtro_usuario != 'Todos':
+            # Aplicar filtro de usuário (se a coluna existir)
+            if filtro_usuario != 'Todos' and 'criado_por' in df_filtrado.columns:
                 df_filtrado = df_filtrado[df_filtrado['criado_por'] == filtro_usuario]
             
             # Aplicar filtro de dias
@@ -638,7 +636,11 @@ with aba4:
                 
                 # Botão de exportação
                 if st.button("📥 Exportar para CSV"):
-                    df_export = df_filtrado[['maquina', 'pedido', 'item', 'inicio', 'fim', 'status', 'qtd', 'criado_por', 'criado_em', 'alterado_por', 'alterado_em']].copy()
+                    cols_export = ['maquina', 'pedido', 'item', 'inicio', 'fim', 'status', 'qtd']
+                    if 'criado_por' in df_filtrado.columns:
+                        cols_export.extend(['criado_por', 'criado_em', 'alterado_por', 'alterado_em'])
+                    
+                    df_export = df_filtrado[cols_export].copy()
                     df_export['inicio'] = df_export['inicio'].dt.strftime('%d/%m/%Y %H:%M')
                     df_export['fim'] = df_export['fim'].dt.strftime('%d/%m/%Y %H:%M')
                     csv = df_export.to_csv(index=False)
@@ -674,21 +676,35 @@ with aba4:
                     
                     with st.expander(f"{status_emoji} {prod['maquina']} | {prod['pedido']} | <span style='color:{cor_prazo}'>{status_prazo}</span>", unsafe_allow_html=True):
                         
-                        # METADADOS DA OP
+                        # METADADOS DA OP (COM VERIFICAÇÃO DE EXISTÊNCIA)
                         st.markdown("#### 📋 Metadados")
                         meta_col1, meta_col2, meta_col3 = st.columns(3)
                         
                         with meta_col1:
-                            st.markdown(f"**👤 Criado por:** {prod.get('criado_por', 'N/A')}")
+                            criado_por = prod.get('criado_por', 'N/A')
+                            st.markdown(f"**👤 Criado por:** {criado_por if criado_por else 'N/A'}")
+                            
                             if prod.get('criado_em'):
-                                criado_em = datetime.strptime(prod['criado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['criado_em'], str) else prod['criado_em']
-                                st.markdown(f"**📅 Criado em:** {criado_em.strftime('%d/%m/%Y %H:%M')}")
+                                try:
+                                    criado_em = datetime.strptime(prod['criado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['criado_em'], str) else prod['criado_em']
+                                    st.markdown(f"**📅 Criado em:** {criado_em.strftime('%d/%m/%Y %H:%M')}")
+                                except:
+                                    st.markdown(f"**📅 Criado em:** {prod['criado_em']}")
+                            else:
+                                st.markdown(f"**📅 Criado em:** N/A")
                         
                         with meta_col2:
-                            st.markdown(f"**✏️ Última alteração:** {prod.get('alterado_por', 'N/A')}")
+                            alterado_por = prod.get('alterado_por', 'N/A')
+                            st.markdown(f"**✏️ Última alteração:** {alterado_por if alterado_por else 'N/A'}")
+                            
                             if prod.get('alterado_em'):
-                                alterado_em = datetime.strptime(prod['alterado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['alterado_em'], str) else prod['alterado_em']
-                                st.markdown(f"**⏰ Alterado em:** {alterado_em.strftime('%d/%m/%Y %H:%M')}")
+                                try:
+                                    alterado_em = datetime.strptime(prod['alterado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['alterado_em'], str) else prod['alterado_em']
+                                    st.markdown(f"**⏰ Alterado em:** {alterado_em.strftime('%d/%m/%Y %H:%M')}")
+                                except:
+                                    st.markdown(f"**⏰ Alterado em:** {prod['alterado_em']}")
+                            else:
+                                st.markdown(f"**⏰ Alterado em:** N/A")
                         
                         with meta_col3:
                             if prod['inicio'] < agora:
@@ -709,7 +725,7 @@ with aba4:
                         
                         with col1:
                             st.write(f"**Item:** {prod['item']}")
-                            descricao = get_descricao_produto(prod['item']) if 'get_descricao_produto' in locals() else "N/A"
+                            descricao = get_descricao_produto(prod['item'])
                             st.write(f"**Descrição:** {descricao}")
                         
                         with col2:
@@ -775,15 +791,21 @@ with aba4:
                                 st.markdown("**📅 Criação:**")
                                 st.caption(f"👤 {prod.get('criado_por', 'N/A')}")
                                 if prod.get('criado_em'):
-                                    criado_em = datetime.strptime(prod['criado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['criado_em'], str) else prod['criado_em']
-                                    st.caption(f"🕒 {criado_em.strftime('%d/%m/%Y %H:%M')}")
+                                    try:
+                                        criado_em = datetime.strptime(prod['criado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['criado_em'], str) else prod['criado_em']
+                                        st.caption(f"🕒 {criado_em.strftime('%d/%m/%Y %H:%M')}")
+                                    except:
+                                        st.caption(f"🕒 {prod['criado_em']}")
                                 
                                 if prod.get('alterado_por'):
                                     st.markdown("**✏️ Última alteração:**")
                                     st.caption(f"👤 {prod['alterado_por']}")
                                     if prod.get('alterado_em'):
-                                        alterado_em = datetime.strptime(prod['alterado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['alterado_em'], str) else prod['alterado_em']
-                                        st.caption(f"🕒 {alterado_em.strftime('%d/%m/%Y %H:%M')}")
+                                        try:
+                                            alterado_em = datetime.strptime(prod['alterado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['alterado_em'], str) else prod['alterado_em']
+                                            st.caption(f"🕒 {alterado_em.strftime('%d/%m/%Y %H:%M')}")
+                                        except:
+                                            st.caption(f"🕒 {prod['alterado_em']}")
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
@@ -799,4 +821,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v7.0 | Industrial By William | Serigrafia | Sopro | Com Metadados e Rastreabilidade")
+st.caption("v7.1 | Industrial By William | Serigrafia | Sopro | Com Metadados e Rastreabilidade - CORRIGIDO")

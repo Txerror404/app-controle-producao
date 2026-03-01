@@ -332,106 +332,83 @@ aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(["➕ Lançar", "🎨 Serigrafia", 
 with aba1:
     with st.container(border=True):
         st.subheader("➕ Novo Lançamento")
-        
-        # Usar o df_produtos que já está no session_state
-        df_prod = st.session_state.df_produtos
-        
+
+        df_prod = st.session_state.df_produtos.copy()
+
+        # GARANTIR PADRONIZAÇÃO
+        df_prod['id_item'] = df_prod['id_item'].astype(str).str.strip()
+
         c1, c2 = st.columns(2)
+
         with c1:
             maq_sel = st.selectbox("🏭 Máquina destino", TODAS_MAQUINAS, key="maq_lanc")
-            
-            # Selectbox do ID_ITEM
+
             opcoes_itens = df_prod['id_item'].tolist()
-            
-            # Callback para atualizar session state quando mudar o ID_ITEM
-            def atualizar_info():
-                id_sel = st.session_state.item_lanc
-                if id_sel:
-                    produto_info = df_prod[df_prod['id_item'] == id_sel]
-                    if not produto_info.empty:
-                        info = produto_info.iloc[0]
-                        st.session_state.desc_auto = info['descricao']
-                        st.session_state.cli_auto = info['cliente']
-                        st.session_state.carga_auto = int(info['qtd_carga'])
-                    else:
-                        st.session_state.desc_auto = "N/A"
-                        st.session_state.cli_auto = "N/A"
-                        st.session_state.carga_auto = CARGA_UNIDADE
-            
-            # Selectbox com callback
+
             item_sel = st.selectbox(
-                "📌 Selecione o ID_ITEM", 
-                opcoes_itens, 
-                key="item_lanc",
-                on_change=atualizar_info
+                "📌 Selecione o ID_ITEM",
+                opcoes_itens,
+                key="item_lanc"
             )
-            
-            # Inicializar session state se necessário
-            if 'desc_auto' not in st.session_state:
-                if item_sel:
-                    produto_info = df_prod[df_prod['id_item'] == item_sel]
-                    if not produto_info.empty:
-                        info = produto_info.iloc[0]
-                        st.session_state.desc_auto = info['descricao']
-                        st.session_state.cli_auto = info['cliente']
-                        st.session_state.carga_auto = int(info['qtd_carga'])
-                    else:
-                        st.session_state.desc_auto = "N/A"
-                        st.session_state.cli_auto = "N/A"
-                        st.session_state.carga_auto = CARGA_UNIDADE
-                else:
-                    st.session_state.desc_auto = "N/A"
-                    st.session_state.cli_auto = "N/A"
-                    st.session_state.carga_auto = CARGA_UNIDADE
-            
-            # Recuperar valores do session state
-            descricao_texto = st.session_state.desc_auto
-            cliente_texto = st.session_state.cli_auto
-            carga_sugerida = st.session_state.carga_auto
-            
-            st.text_input("📝 Descrição do Produto", value=descricao_texto, disabled=True, key="desc_lanc")
+
+            # BUSCA AUTOMÁTICA SEGURA
+            descricao_texto = "N/A"
+            cliente_texto = "N/A"
+            carga_sugerida = CARGA_UNIDADE
+
+            if item_sel:
+                id_busca = str(item_sel).strip()
+                produto_info = df_prod[df_prod['id_item'] == id_busca]
+
+                if not produto_info.empty:
+                    info = produto_info.iloc[0]
+                    descricao_texto = info['descricao']
+                    cliente_texto = info['cliente']
+                    carga_sugerida = int(info['qtd_carga'])
+
+            st.text_input("📝 Descrição do Produto", value=descricao_texto, disabled=True)
         
         with c2:
             op_num = st.text_input("🔢 Número da OP", key="op_num")
-            st.text_input("👥 Cliente", value=cliente_texto, disabled=True, key="cli_lanc")
+            st.text_input("👥 Cliente", value=cliente_texto, disabled=True)
             qtd_lanc = st.number_input("📊 Quantidade Total", value=carga_sugerida, key="qtd_lanc")
-        
+
         st.divider()
+
         c3, c4, c5 = st.columns(3)
         setup_min = c3.number_input("⏱️ Tempo de Setup (min)", value=30, key="setup_lanc")
         sugestao_h = proximo_horario(maq_sel)
         data_ini = c4.date_input("📅 Data de Início", sugestao_h.date(), key="data_lanc")
         hora_ini = c5.time_input("⏰ Hora de Início", sugestao_h.time(), key="hora_lanc")
-        
+
         if st.button("🚀 CONFIRMAR E AGENDAR", type="primary", use_container_width=True):
             if op_num and item_sel:
                 inicio_dt = datetime.combine(data_ini, hora_ini)
                 fim_dt = inicio_dt + timedelta(hours=qtd_lanc/CADENCIA_PADRAO)
+
                 with conectar() as conn:
                     cur = conn.cursor()
                     cur.execute(
                         "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                        (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel, 
-                         inicio_dt.strftime('%Y-%m-%d %H:%M:%S'), 
-                         fim_dt.strftime('%Y-%m-%d %H:%M:%S'), 
+                        (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel,
+                         inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                         fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
                          "Pendente", qtd_lanc)
                     )
+
                     if setup_min > 0:
                         conn.execute(
                             "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
-                            (maq_sel, f"SETUP {op_num}", "Ajuste", 
-                             fim_dt.strftime('%Y-%m-%d %H:%M:%S'), 
-                             (fim_dt + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'), 
+                            (maq_sel, f"SETUP {op_num}", "Ajuste",
+                             fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                             (fim_dt + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'),
                              "Setup", 0, cur.lastrowid)
                         )
                     conn.commit()
+
                 st.success("Lançamento concluído com sucesso!")
-                
-                # Limpar session state após lançar
-                for key in ['desc_auto', 'cli_auto', 'carga_auto']:
-                    if key in st.session_state:
-                        del st.session_state[key]
                 st.rerun()
+
             else:
                 if not op_num:
                     st.error("❌ Digite o número da OP!")

@@ -97,13 +97,18 @@ if not st.session_state.auth_ok:
     with col2:
         email = st.text_input("E-mail autorizado:").lower().strip()
         if st.button("Acessar Sistema", use_container_width=True):
-            if email in [ADMIN_EMAIL, OPERACIONAL_EMAIL]: 
+            if email in [ADMIN_EMAIL] + OPERACIONAL_EMAIL: 
                 st.session_state.auth_ok = True
                 st.session_state.user_email = email
                 st.rerun()
     st.stop()
 
-df_produtos = carregar_produtos_google()
+# Carregar produtos e armazenar no session_state
+if 'df_produtos' not in st.session_state:
+    with st.spinner("Sincronizando com Google Sheets..."):
+        st.session_state.df_produtos = carregar_produtos_google()
+
+df_produtos = st.session_state.df_produtos
 
 # CABEÇALHO
 st.markdown(f"""
@@ -120,7 +125,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =================================================================
-# 4. GRÁFICOS E STATUS (FUNÇÃO CORRIGIDA)
+# 4. GRÁFICOS E STATUS
 # =================================================================
 def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     df_all = carregar_dados()
@@ -135,15 +140,11 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
 
     # Status para cores
     df_g["status_cor"] = df_g["status"]
-    # SETUP sempre permanece como SETUP (não vira Executando)
     df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente"), "status_cor"] = "Executando"
     
     # CRIAR COLUNA DE COR PERSONALIZADA
     df_g["cor_barra"] = df_g["status_cor"]
-    # SE ESTIVER ATRASADA E FOR PENDENTE (NÃO SETUP), MUDA PARA VERMELHO
     df_g.loc[(df_g["fim"] < agora) & (df_g["status"] == "Pendente"), "cor_barra"] = "Atrasada"
-    
-    # SETUP sempre permanece SETUP (nunca vira atrasado)
     df_g.loc[df_g["status"] == "Setup", "cor_barra"] = "Setup"
 
     fig = px.timeline(
@@ -152,9 +153,9 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         color_discrete_map={
             "Pendente": "#3498db", 
             "Concluído": "#2ecc71", 
-            "Setup": "#7f7f7f",      # CINZA FIXO
+            "Setup": "#7f7f7f",
             "Executando": "#ff7f0e",
-            "Atrasada": "#FF4B4B"     # VERMELHO para atrasadas
+            "Atrasada": "#FF4B4B"
         }
     )
 
@@ -203,7 +204,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
-    
+
     # ============================================================
     # CARDS DE STATUS DETALHADOS
     # ============================================================
@@ -223,19 +224,16 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     if not ops_em_execucao.empty:
         st.markdown("#### 🔴 OPs em Execução Agora:")
         
-        # Criar linhas com até 3 cards por linha
         for i in range(0, len(ops_em_execucao), 3):
             cols = st.columns(3)
             for j in range(3):
                 if i + j < len(ops_em_execucao):
                     op = ops_em_execucao.iloc[i + j]
                     
-                    # Extrair informações do pedido (formato: "CLIENTE | OP:NUMERO")
                     pedido_split = op['pedido'].split(' | ')
                     cliente = pedido_split[0] if len(pedido_split) > 0 else "N/A"
                     op_numero = pedido_split[1].replace('OP:', '') if len(pedido_split) > 1 else "N/A"
                     
-                    # Buscar descrição do produto
                     descricao_produto = get_descricao_produto(op['item'])
                     
                     with cols[j]:
@@ -263,19 +261,16 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     if not ops_atrasadas.empty:
         st.markdown("#### 🚨 OPs ATRASADAS")
         
-        # Criar linhas com até 3 cards por linha
         for i in range(0, len(ops_atrasadas), 3):
             cols = st.columns(3)
             for j in range(3):
                 if i + j < len(ops_atrasadas):
                     op = ops_atrasadas.iloc[i + j]
                     
-                    # Extrair informações do pedido
                     pedido_split = op['pedido'].split(' | ')
                     cliente = pedido_split[0] if len(pedido_split) > 0 else "N/A"
                     op_numero = pedido_split[1].replace('OP:', '') if len(pedido_split) > 1 else "N/A"
                     
-                    # Buscar descrição do produto
                     descricao_produto = get_descricao_produto(op['item'])
                     
                     with cols[j]:
@@ -301,7 +296,6 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     if maquinas_sem_programacao:
         st.markdown("#### 💤 Máquinas sem Programação")
         
-        # Criar linhas com até 4 cards por linha
         for i in range(0, len(maquinas_sem_programacao), 4):
             cols = st.columns(4)
             for j in range(4):
@@ -315,7 +309,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
                         """, unsafe_allow_html=True)
         st.divider()
     
-    # 4. MÉTRICAS GERAIS (CARDS PEQUENOS)
+    # 4. MÉTRICAS GERAIS
     st.markdown("#### 📊 Métricas Gerais")
     c1, c2, c3, c4 = st.columns(4)
     
@@ -329,6 +323,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     c3.metric("📦 Total OPs Pendentes", total_ops)
     c4.metric("📈 Taxa de Ocupação", f"{(em_uso_count/total_setor)*100:.1f}%" if total_setor > 0 else "0%")
     st.divider()
+
 # =================================================================
 # 5. ABAS E LÓGICA DE NEGÓCIO
 # =================================================================
@@ -337,36 +332,41 @@ aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(["➕ Lançar", "🎨 Serigrafia", 
 with aba1:
     with st.container(border=True):
         st.subheader("➕ Novo Lançamento")
+        
+        # Usar o df_produtos do session_state
+        df_prod = st.session_state.df_produtos
+        
         c1, c2 = st.columns(2)
         with c1:
             maq_sel = st.selectbox("🏭 Máquina destino", TODAS_MAQUINAS, key="maq_lanc")
             
             # Selectbox do ID_ITEM
-            item_sel = st.selectbox("📌 Selecione o ID_ITEM", df_produtos['id_item'].tolist(), key="item_lanc")
+            opcoes_itens = df_prod['id_item'].tolist()
+            item_sel = st.selectbox("📌 Selecione o ID_ITEM", opcoes_itens, key="item_lanc")
             
-            # BUSCA AUTOMÁTICA DE DESCRIÇÃO E CLIENTE
-            if item_sel and not df_produtos.empty:
-                info_prod = df_produtos[df_produtos['id_item'] == item_sel]
-                if not info_prod.empty:
-                    info = info_prod.iloc[0]
-                    desc_auto = info.get('descricao', 'N/A')
-                    cli_auto = info.get('cliente', 'N/A')
-                    carga_auto = info.get('qtd_carga', CARGA_UNIDADE)
+            # Buscar informações do produto selecionado
+            if item_sel:
+                produto_info = df_prod[df_prod['id_item'] == item_sel]
+                if not produto_info.empty:
+                    info = produto_info.iloc[0]
+                    descricao_texto = info['descricao']
+                    cliente_texto = info['cliente']
+                    carga_sugerida = int(info['qtd_carga'])
                 else:
-                    desc_auto = 'N/A'
-                    cli_auto = 'N/A'
-                    carga_auto = CARGA_UNIDADE
+                    descricao_texto = "N/A"
+                    cliente_texto = "N/A"
+                    carga_sugerida = CARGA_UNIDADE
             else:
-                desc_auto = 'N/A'
-                cli_auto = 'N/A'
-                carga_auto = CARGA_UNIDADE
+                descricao_texto = "N/A"
+                cliente_texto = "N/A"
+                carga_sugerida = CARGA_UNIDADE
             
-            st.text_input("📝 Descrição do Produto", value=desc_auto, disabled=True, key="desc_lanc")
+            st.text_input("📝 Descrição do Produto", value=descricao_texto, disabled=True, key="desc_lanc")
         
         with c2:
             op_num = st.text_input("🔢 Número da OP", key="op_num")
-            st.text_input("👥 Cliente", value=cli_auto, disabled=True, key="cli_lanc")
-            qtd_lanc = st.number_input("📊 Quantidade Total", value=int(carga_auto), key="qtd_lanc")
+            st.text_input("👥 Cliente", value=cliente_texto, disabled=True, key="cli_lanc")
+            qtd_lanc = st.number_input("📊 Quantidade Total", value=carga_sugerida, key="qtd_lanc")
         
         st.divider()
         c3, c4, c5 = st.columns(3)
@@ -376,26 +376,35 @@ with aba1:
         hora_ini = c5.time_input("⏰ Hora de Início", sugestao_h.time(), key="hora_lanc")
         
         if st.button("🚀 CONFIRMAR E AGENDAR", type="primary", use_container_width=True):
-            if op_num:
+            if op_num and item_sel:
                 inicio_dt = datetime.combine(data_ini, hora_ini)
                 fim_dt = inicio_dt + timedelta(hours=qtd_lanc/CADENCIA_PADRAO)
                 with conectar() as conn:
                     cur = conn.cursor()
                     cur.execute(
                         "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
-                        (maq_sel, f"{cli_auto} | {op_num}", item_sel, inicio_dt.strftime('%Y-%m-%d %H:%M:%S'), 
-                         fim_dt.strftime('%Y-%m-%d %H:%M:%S'), "Pendente", qtd_lanc)
+                        (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel, 
+                         inicio_dt.strftime('%Y-%m-%d %H:%M:%S'), 
+                         fim_dt.strftime('%Y-%m-%d %H:%M:%S'), 
+                         "Pendente", qtd_lanc)
                     )
                     if setup_min > 0:
                         conn.execute(
                             "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
-                            (maq_sel, f"SETUP {op_num}", "Ajuste", fim_dt.strftime('%Y-%m-%d %H:%M:%S'), 
-                             (fim_dt + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'), "Setup", 0, cur.lastrowid)
+                            (maq_sel, f"SETUP {op_num}", "Ajuste", 
+                             fim_dt.strftime('%Y-%m-%d %H:%M:%S'), 
+                             (fim_dt + timedelta(minutes=setup_min)).strftime('%Y-%m-%d %H:%M:%S'), 
+                             "Setup", 0, cur.lastrowid)
                         )
                     conn.commit()
                 st.success("Lançamento concluído com sucesso!")
                 st.rerun()
-# CHAMADAS DOS SETORES COM POSIÇÕES DIFERENTES
+            else:
+                if not op_num:
+                    st.error("❌ Digite o número da OP!")
+                if not item_sel:
+                    st.error("❌ Selecione um ID_ITEM!")
+
 with aba2: 
     renderizar_setor(MAQUINAS_SERIGRAFIA, 450, -0.30)
 
@@ -447,4 +456,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v6.0 | PCP Industrial William | 16 Máquinas Sopro | AGORA com posição ajustada")
+st.caption("v6.0 | PCP Industrial William | 16 Máquinas Sopro | Sistema Completo")

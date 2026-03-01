@@ -45,16 +45,38 @@ def conectar():
     return sqlite3.connect("pcp.db", check_same_thread=False)
 
 with conectar() as conn:
+    # Criar tabela se não existir (versão inicial)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS agenda (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
             maquina TEXT, pedido TEXT, item TEXT, 
             inicio TEXT, fim TEXT, status TEXT, 
-            qtd REAL, vinculo_id INTEGER,
-            criado_por TEXT, criado_em TEXT,
-            alterado_por TEXT, alterado_em TEXT
+            qtd REAL, vinculo_id INTEGER
         )
     """)
+    
+    # ADICIONAR NOVAS COLUNAS SE NÃO EXISTIREM (MIGRAÇÃO)
+    try:
+        conn.execute("ALTER TABLE agenda ADD COLUMN criado_por TEXT")
+    except sqlite3.OperationalError:
+        pass  # Coluna já existe
+    
+    try:
+        conn.execute("ALTER TABLE agenda ADD COLUMN criado_em TEXT")
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        conn.execute("ALTER TABLE agenda ADD COLUMN alterado_por TEXT")
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        conn.execute("ALTER TABLE agenda ADD COLUMN alterado_em TEXT")
+    except sqlite3.OperationalError:
+        pass
+    
+    conn.commit()
 
 @st.cache_data(ttl=600)
 def carregar_produtos_google():

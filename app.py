@@ -135,11 +135,22 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
 
     df_g["status_cor"] = df_g["status"]
     df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
+    
+    # CRIAR COLUNA DE COR PERSONALIZADA
+    df_g["cor_barra"] = df_g["status_cor"]
+    # SE ESTIVER ATRASADA E NÃO CONCLUÍDA, MUDA PARA VERMELHO
+    df_g.loc[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"])), "cor_barra"] = "Atrasada"
 
     fig = px.timeline(
-        df_g, x_start="inicio", x_end="fim", y="maquina", color="status_cor", text="rotulo_barra",
+        df_g, x_start="inicio", x_end="fim", y="maquina", color="cor_barra", text="rotulo_barra",
         category_orders={"maquina": lista_maquinas},
-        color_discrete_map={"Pendente": "#3498db", "Concluído": "#2ecc71", "Setup": "#7f7f7f", "Executando": "#ff7f0e"}
+        color_discrete_map={
+            "Pendente": "#3498db", 
+            "Concluído": "#2ecc71", 
+            "Setup": "#7f7f7f", 
+            "Executando": "#ff7f0e",
+            "Atrasada": "#FF4B4B"  # VERMELHO PARA ATRASADAS
+        }
     )
 
     fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)

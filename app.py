@@ -241,7 +241,7 @@ with aba1:
                 st.success("Lançamento concluído com sucesso!"); st.rerun()
 
 with aba2: renderizar_setor(MAQUINAS_SERIGRAFIA, 450)
-with aba3: renderizar_setor(MAQUINAS_SOPRO, 1000)
+with aba3: renderizar_setor(MAQUINAS_SOPRO, 750)
 
 with aba4:
     st.subheader("⚙️ Gerenciamento e Reprogramação")

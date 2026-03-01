@@ -133,13 +133,18 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         st.info("Sem dados para este setor.")
         return
 
+    # Status para cores
     df_g["status_cor"] = df_g["status"]
-    df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído"), "status_cor"] = "Executando"
+    # SETUP sempre permanece como SETUP (não vira Executando)
+    df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente"), "status_cor"] = "Executando"
     
     # CRIAR COLUNA DE COR PERSONALIZADA
     df_g["cor_barra"] = df_g["status_cor"]
-    # SE ESTIVER ATRASADA E NÃO CONCLUÍDA, MUDA PARA VERMELHO
-    df_g.loc[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"])), "cor_barra"] = "Atrasada"
+    # SE ESTIVER ATRASADA E FOR PENDENTE (NÃO SETUP), MUDA PARA VERMELHO
+    df_g.loc[(df_g["fim"] < agora) & (df_g["status"] == "Pendente"), "cor_barra"] = "Atrasada"
+    
+    # SETUP sempre permanece SETUP (nunca vira atrasado)
+    df_g.loc[df_g["status"] == "Setup", "cor_barra"] = "Setup"
 
     fig = px.timeline(
         df_g, x_start="inicio", x_end="fim", y="maquina", color="cor_barra", text="rotulo_barra",
@@ -147,9 +152,9 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         color_discrete_map={
             "Pendente": "#3498db", 
             "Concluído": "#2ecc71", 
-            "Setup": "#7f7f7f", 
+            "Setup": "#7f7f7f",      # CINZA FIXO
             "Executando": "#ff7f0e",
-            "Atrasada": "#FF4B4B"  # VERMELHO PARA ATRASADAS
+            "Atrasada": "#FF4B4B"     # VERMELHO para atrasadas
         }
     )
 
@@ -199,12 +204,13 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
 
-    # CARDS DE STATUS COM DESTAQUE VERMELHO
-    st.markdown("### 📊 Status do Setor - OPs atrasadas em vermelho")
+    # CARDS DE STATUS - Setup não entra na conta
+    st.markdown("### 📊 Status do Setor - Apenas OPs contam para atraso")
     c1, c2, c3, c4 = st.columns(4)
     
-    atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"].isin(["Pendente", "Setup"]))].shape[0]
-    em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] != "Concluído")]["maquina"].nunique()
+    # Cálculo de atrasadas: APENAS Pendente (exclui Setup)
+    atrasadas = df_g[(df_g["fim"] < agora) & (df_g["status"] == "Pendente")].shape[0]
+    em_uso = df_g[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente")]["maquina"].nunique()
     total_setor = len(lista_maquinas)
     
     # Card de OPs Atrasadas em VERMELHO se houver atrasos
@@ -218,7 +224,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     else:
         c1.metric("🚨 OPs Atrasadas", atrasadas)
     
-    c2.metric("⚙️ Máquinas em Uso", em_uso)
+    c2.metric("⚙️ OPs em Execução", em_uso)
     c3.metric("💤 Máquinas Livres", total_setor - em_uso)
     c4.metric("📈 Taxa de Ocupação", f"{(em_uso/total_setor)*100:.1f}%")
     st.divider()

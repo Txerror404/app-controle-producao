@@ -39,7 +39,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =================================================================
-# 2. BANCO DE DADOS E CARREGAMENTO
+# 2. BANCO DE DADOS E CARREGAMENTO (ATUALIZADO COM METADADOS)
 # =================================================================
 def conectar(): 
     return sqlite3.connect("pcp.db", check_same_thread=False)
@@ -50,7 +50,9 @@ with conectar() as conn:
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
             maquina TEXT, pedido TEXT, item TEXT, 
             inicio TEXT, fim TEXT, status TEXT, 
-            qtd REAL, vinculo_id INTEGER
+            qtd REAL, vinculo_id INTEGER,
+            criado_por TEXT, criado_em TEXT,
+            alterado_por TEXT, alterado_em TEXT
         )
     """)
 
@@ -136,7 +138,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =================================================================
-# 4. GRÁFICOS E STATUS (COM HOVER PERSONALIZADO)
+# 4. GRÁFICOS E STATUS (COM HOVER CORRIGIDO)
 # =================================================================
 def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
     df_all = carregar_dados()
@@ -149,7 +151,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
         st.info("Sem dados para este setor.")
         return
 
-        # Status para cores
+    # Status para cores
     df_g["status_cor"] = df_g["status"]
     df_g.loc[(df_g["inicio"] <= agora) & (df_g["fim"] >= agora) & (df_g["status"] == "Pendente"), "status_cor"] = "Executando"
     
@@ -194,6 +196,7 @@ def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
             "<extra></extra>"
         ])
     )
+
     fig.update_yaxes(autorange="reversed", title="", showgrid=True, gridcolor='rgba(255,255,255,0.15)', zeroline=False)
     fig.update_traces(textposition='inside', insidetextanchor='start', width=0.92)
     
@@ -446,13 +449,15 @@ with aba1:
                     
                     with conectar() as conn:
                         cur = conn.cursor()
-                        # Insere a PRODUÇÃO
+                        # Insere a PRODUÇÃO com dados de quem criou
                         cur.execute(
-                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?)",
                             (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel,
                              inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                             "Pendente", qtd_lanc)
+                             "Pendente", qtd_lanc,
+                             st.session_state.user_email,
+                             agora.strftime('%Y-%m-%d %H:%M:%S'))
                         )
                         producao_id = cur.lastrowid
                         
@@ -460,11 +465,13 @@ with aba1:
                         if minutos_parada > 0:
                             fim_setup = fim_dt + timedelta(minutes=minutos_parada)
                             conn.execute(
-                                "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id) VALUES (?,?,?,?,?,?,?,?)",
+                                "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?,?)",
                                 (maq_sel, f"SETUP {op_num}", "Ajuste",
                                  fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
                                  fim_setup.strftime('%Y-%m-%d %H:%M:%S'),
-                                 "Setup", 0, producao_id)
+                                 "Setup", 0, producao_id,
+                                 st.session_state.user_email,
+                                 agora.strftime('%Y-%m-%d %H:%M:%S'))
                             )
                         conn.commit()
                     st.success("Produção com setup automático lançada com sucesso!")
@@ -476,11 +483,13 @@ with aba1:
                     with conectar() as conn:
                         cur = conn.cursor()
                         cur.execute(
-                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?)",
                             (maq_sel, f"SETUP MANUAL | {op_num}", item_sel,
                              inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
-                             "Setup", 0)
+                             "Setup", 0,
+                             st.session_state.user_email,
+                             agora.strftime('%Y-%m-%d %H:%M:%S'))
                         )
                         conn.commit()
                     st.success("Setup manual agendado com sucesso!")
@@ -492,11 +501,13 @@ with aba1:
                     with conectar() as conn:
                         cur = conn.cursor()
                         cur.execute(
-                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd) VALUES (?,?,?,?,?,?,?)",
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?)",
                             (maq_sel, f"MANUTENÇÃO | {op_num}", item_sel,
                              inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
-                             "Manutenção", 0)
+                             "Manutenção", 0,
+                             st.session_state.user_email,
+                             agora.strftime('%Y-%m-%d %H:%M:%S'))
                         )
                         conn.commit()
                     st.success("Manutenção agendada com sucesso!")
@@ -514,6 +525,9 @@ with aba2:
 with aba3: 
     renderizar_setor(MAQUINAS_SOPRO, 750, -0.45)
 
+# =================================================================
+# ABA 4 - GERENCIAR (VERSÃO COMPLETA COM METADADOS)
+# =================================================================
 with aba4:
     st.subheader("⚙️ Gerenciamento e Reprogramação")
     
@@ -523,7 +537,36 @@ with aba4:
         pendentes = len(df_count[df_count["status"] == "Pendente"])
         setups = len(df_count[df_count["status"] == "Setup"])
         manutencoes = len(df_count[df_count["status"] == "Manutenção"])
-        st.caption(f"📊 **Resumo:** {pendentes} OPs programadas | {setups} Setups | {manutencoes} Manutenções")
+        
+        # Métricas no topo
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        col_m1.metric("📦 OPs Pendentes", pendentes)
+        col_m2.metric("🔧 Setups", setups)
+        col_m3.metric("🔩 Manutenções", manutencoes)
+        col_m4.metric("👥 Usuário", st.session_state.user_email.split('@')[0])
+        
+        st.divider()
+    
+    # Filtros avançados
+    with st.expander("🔍 Filtros Avançados", expanded=False):
+        col_f1, col_f2, col_f3 = st.columns(3)
+        
+        # Carregar lista de usuários únicos para filtro
+        df_temp = carregar_dados()
+        usuarios_lista = ['Todos'] + df_temp['criado_por'].dropna().unique().tolist() if not df_temp.empty else ['Todos']
+        
+        with col_f1:
+            filtro_status = st.multiselect(
+                "Status", 
+                ["Pendente", "Setup", "Manutenção"],
+                default=["Pendente", "Setup", "Manutenção"]
+            )
+        
+        with col_f2:
+            filtro_usuario = st.selectbox("Criado por", usuarios_lista)
+        
+        with col_f3:
+            filtro_dias = st.slider("Dias até início", 0, 30, 30)
     
     # Campo de pesquisa
     search_term = st.text_input("🔍 Pesquisar OP Programada", 
@@ -532,17 +575,15 @@ with aba4:
     
     df_ger = carregar_dados()
     if not df_ger.empty:
-        # Filtrar APENAS OPs NÃO CONCLUÍDAS (programadas + em execução + setup + manutenção)
-        df_programadas = df_ger[df_ger["status"].isin(["Pendente", "Setup", "Manutenção"])].copy()
+        # Filtrar APENAS OPs NÃO CONCLUÍDAS
+        df_programadas = df_ger[df_ger["status"].isin(filtro_status)].copy()
         
         if df_programadas.empty:
             st.info("✅ Nenhuma OP programada no momento.")
         else:
-            # Aplicar filtro de pesquisa se houver termo
+            # Aplicar filtro de pesquisa
             if search_term:
                 search_term_lower = search_term.lower()
-                
-                # Criar coluna auxiliar com número da OP (extraído do pedido)
                 df_programadas['op_numero_aux'] = df_programadas['pedido'].apply(
                     lambda x: x.split('OP:')[-1] if 'OP:' in x else x
                 )
@@ -556,12 +597,30 @@ with aba4:
             else:
                 df_filtrado = df_programadas
             
+            # Aplicar filtro de usuário
+            if filtro_usuario != 'Todos':
+                df_filtrado = df_filtrado[df_filtrado['criado_por'] == filtro_usuario]
+            
+            # Aplicar filtro de dias
+            data_limite = agora + timedelta(days=filtro_dias)
+            df_filtrado = df_filtrado[df_filtrado['inicio'] <= data_limite]
+            
             if df_filtrado.empty:
-                st.warning(f"Nenhuma OP programada encontrada para: '{search_term}'")
+                st.warning(f"Nenhuma OP encontrada com os filtros selecionados")
             else:
-                st.success(f"🔎 **{len(df_filtrado)}** OPs programadas encontradas")
+                st.success(f"🔎 **{len(df_filtrado)}** OPs encontradas")
                 
-                # Ordenar por data de início (mais próximas primeiro)
+                # Botão de exportação
+                if st.button("📥 Exportar para CSV"):
+                    df_export = df_filtrado[['maquina', 'pedido', 'item', 'inicio', 'fim', 'status', 'qtd', 'criado_por', 'criado_em', 'alterado_por', 'alterado_em']].copy()
+                    df_export['inicio'] = df_export['inicio'].dt.strftime('%d/%m/%Y %H:%M')
+                    df_export['fim'] = df_export['fim'].dt.strftime('%d/%m/%Y %H:%M')
+                    csv = df_export.to_csv(index=False)
+                    st.download_button("⬇️ Download CSV", csv, "ops_programadas.csv", "text/csv")
+                
+                st.divider()
+                
+                # Ordenar por data de início
                 df_filtrado = df_filtrado.sort_values("inicio")
                 
                 is_admin = st.session_state.user_email == ADMIN_EMAIL
@@ -573,42 +632,69 @@ with aba4:
                         "Manutenção": "🔩"
                     }.get(prod['status'], "📌")
                     
-                    with st.expander(f"{status_emoji} {prod['maquina']} | {prod['pedido']} | {prod['inicio'].strftime('%d/%m %H:%M')}"):
+                    # Calcular status de prazo
+                    dias_para_inicio = (prod['inicio'] - agora).days
+                    horas_para_inicio = (prod['inicio'] - agora).seconds / 3600
+                    
+                    if prod['inicio'] < agora:
+                        status_prazo = "🔴 ATRASADA"
+                        cor_prazo = "red"
+                    elif dias_para_inicio == 0 and horas_para_inicio <= 2:
+                        status_prazo = "🟡 Começa hoje!"
+                        cor_prazo = "orange"
+                    else:
+                        status_prazo = f"🟢 Em {dias_para_inicio} dias"
+                        cor_prazo = "green"
+                    
+                    with st.expander(f"{status_emoji} {prod['maquina']} | {prod['pedido']} | <span style='color:{cor_prazo}'>{status_prazo}</span>", unsafe_allow_html=True):
+                        
+                        # METADADOS DA OP
+                        st.markdown("#### 📋 Metadados")
+                        meta_col1, meta_col2, meta_col3 = st.columns(3)
+                        
+                        with meta_col1:
+                            st.markdown(f"**👤 Criado por:** {prod.get('criado_por', 'N/A')}")
+                            if prod.get('criado_em'):
+                                criado_em = datetime.strptime(prod['criado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['criado_em'], str) else prod['criado_em']
+                                st.markdown(f"**📅 Criado em:** {criado_em.strftime('%d/%m/%Y %H:%M')}")
+                        
+                        with meta_col2:
+                            st.markdown(f"**✏️ Última alteração:** {prod.get('alterado_por', 'N/A')}")
+                            if prod.get('alterado_em'):
+                                alterado_em = datetime.strptime(prod['alterado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['alterado_em'], str) else prod['alterado_em']
+                                st.markdown(f"**⏰ Alterado em:** {alterado_em.strftime('%d/%m/%Y %H:%M')}")
+                        
+                        with meta_col3:
+                            if prod['inicio'] < agora:
+                                st.markdown(f"<span style='color:red; font-weight:bold'>⚠️ ATRASADA</span>", unsafe_allow_html=True)
+                            elif dias_para_inicio == 0:
+                                if horas_para_inicio <= 1:
+                                    st.markdown(f"<span style='color:orange; font-weight:bold'>⚡ Começa em menos de 1 hora!</span>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"<span style='color:orange; font-weight:bold'>⚡ Começa hoje às {prod['inicio'].strftime('%H:%M')}</span>", unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"<span style='color:green; font-weight:bold'>✅ Em {dias_para_inicio} dias</span>", unsafe_allow_html=True)
+                        
+                        st.divider()
+                        
+                        # DETALHES DA OP
+                        st.markdown("#### 📦 Detalhes da OP")
                         col1, col2, col3 = st.columns([2, 2, 1.2])
                         
                         with col1:
                             st.write(f"**Item:** {prod['item']}")
-                            if prod['status'] == "Pendente":
-                                st.write(f"**QTD:** {int(prod['qtd'])} unidades")
+                            descricao = get_descricao_produto(prod['item']) if 'get_descricao_produto' in locals() else "N/A"
+                            st.write(f"**Descrição:** {descricao}")
                         
                         with col2:
                             st.write(f"**Início:** {prod['inicio'].strftime('%d/%m %H:%M')}")
                             st.write(f"**Fim:** {prod['fim'].strftime('%d/%m %H:%M')}")
+                            if prod['status'] == "Pendente":
+                                st.write(f"**QTD:** {int(prod['qtd'])} unidades")
                         
-                        if is_admin:
-                            with col3:
-                                with st.popover("✏️ Reprogramar"):
-                                    st.markdown("### Alterar horário")
-                                    n_data = st.date_input("Nova Data", prod['inicio'].date(), key=f"d_{prod['id']}")
-                                    n_hora = st.time_input("Nova Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
-                                    
-                                    col_confirm1, col_confirm2 = st.columns(2)
-                                    with col_confirm1:
-                                        if st.button("✅ Confirmar", key=f"conf_{prod['id']}", use_container_width=True):
-                                            novo_i = datetime.combine(n_data, n_hora)
-                                            novo_f = novo_i + (prod['fim'] - prod['inicio'])
-                                            with conectar() as c:
-                                                c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", 
-                                                         (novo_i.strftime('%Y-%m-%d %H:%M:%S'), 
-                                                          novo_f.strftime('%Y-%m-%d %H:%M:%S'), prod['id']))
-                                                c.commit()
-                                            st.rerun()
-                                    with col_confirm2:
-                                        if st.button("❌ Cancelar", key=f"cancel_{prod['id']}", use_container_width=True):
-                                            st.rerun()
-                        
-                        # Botões de ação
-                        col_a, col_b, col_c = st.columns([1, 1, 1])
+                        # AÇÕES
+                        st.markdown("#### 🛠️ Ações")
+                        col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
                         
                         with col_a:
                             if st.button("✅ Finalizar", key=f"ok_{prod['id']}", use_container_width=True):
@@ -624,6 +710,54 @@ with aba4:
                                         c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
                                         c.commit()
                                     st.rerun()
+                        
+                        with col_c:
+                            if is_admin:
+                                with st.popover("✏️ Reprogramar"):
+                                    st.markdown("### Alterar horário")
+                                    n_data = st.date_input("Nova Data", prod['inicio'].date(), key=f"d_{prod['id']}")
+                                    n_hora = st.time_input("Nova Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
+                                    
+                                    st.markdown(f"**Alterado por:** {st.session_state.user_email}")
+                                    
+                                    col_confirm1, col_confirm2 = st.columns(2)
+                                    with col_confirm1:
+                                        if st.button("✅ Confirmar", key=f"conf_{prod['id']}", use_container_width=True):
+                                            novo_i = datetime.combine(n_data, n_hora)
+                                            novo_f = novo_i + (prod['fim'] - prod['inicio'])
+                                            with conectar() as c:
+                                                c.execute("""
+                                                    UPDATE agenda 
+                                                    SET inicio=?, fim=?, 
+                                                        alterado_por=?, alterado_em=? 
+                                                    WHERE id=?
+                                                    """, 
+                                                    (novo_i.strftime('%Y-%m-%d %H:%M:%S'), 
+                                                     novo_f.strftime('%Y-%m-%d %H:%M:%S'),
+                                                     st.session_state.user_email,
+                                                     agora.strftime('%Y-%m-%d %H:%M:%S'),
+                                                     prod['id']))
+                                                c.commit()
+                                            st.rerun()
+                                    with col_confirm2:
+                                        if st.button("❌ Cancelar", key=f"cancel_{prod['id']}", use_container_width=True):
+                                            st.rerun()
+                        
+                        with col_d:
+                            # Histórico rápido
+                            with st.popover("📜 Histórico"):
+                                st.markdown("**📅 Criação:**")
+                                st.caption(f"👤 {prod.get('criado_por', 'N/A')}")
+                                if prod.get('criado_em'):
+                                    criado_em = datetime.strptime(prod['criado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['criado_em'], str) else prod['criado_em']
+                                    st.caption(f"🕒 {criado_em.strftime('%d/%m/%Y %H:%M')}")
+                                
+                                if prod.get('alterado_por'):
+                                    st.markdown("**✏️ Última alteração:**")
+                                    st.caption(f"👤 {prod['alterado_por']}")
+                                    if prod.get('alterado_em'):
+                                        alterado_em = datetime.strptime(prod['alterado_em'], '%Y-%m-%d %H:%M:%S') if isinstance(prod['alterado_em'], str) else prod['alterado_em']
+                                        st.caption(f"🕒 {alterado_em.strftime('%d/%m/%Y %H:%M')}")
     else:
         st.info("ℹ️ Nenhuma produção cadastrada.")
 
@@ -639,4 +773,4 @@ with aba6:
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
 st.divider()
-st.caption("v6.4 | Industrial By William | Serigrafia | Sopro | Hover Personalizado | Pesquisa na Gerenciar")
+st.caption("v7.0 | Industrial By William | Serigrafia | Sopro | Com Metadados e Rastreabilidade")

@@ -333,7 +333,7 @@ with aba1:
     with st.container(border=True):
         st.subheader("➕ Novo Lançamento")
         
-        # Usar o df_produtos do session_state
+        # Usar o df_produtos que já está no session_state
         df_prod = st.session_state.df_produtos
         
         c1, c2 = st.columns(2)
@@ -342,24 +342,52 @@ with aba1:
             
             # Selectbox do ID_ITEM
             opcoes_itens = df_prod['id_item'].tolist()
-            item_sel = st.selectbox("📌 Selecione o ID_ITEM", opcoes_itens, key="item_lanc")
             
-            # Buscar informações do produto selecionado
-            if item_sel:
-                produto_info = df_prod[df_prod['id_item'] == item_sel]
-                if not produto_info.empty:
-                    info = produto_info.iloc[0]
-                    descricao_texto = info['descricao']
-                    cliente_texto = info['cliente']
-                    carga_sugerida = int(info['qtd_carga'])
+            # Callback para atualizar session state quando mudar o ID_ITEM
+            def atualizar_info():
+                id_sel = st.session_state.item_lanc
+                if id_sel:
+                    produto_info = df_prod[df_prod['id_item'] == id_sel]
+                    if not produto_info.empty:
+                        info = produto_info.iloc[0]
+                        st.session_state.desc_auto = info['descricao']
+                        st.session_state.cli_auto = info['cliente']
+                        st.session_state.carga_auto = int(info['qtd_carga'])
+                    else:
+                        st.session_state.desc_auto = "N/A"
+                        st.session_state.cli_auto = "N/A"
+                        st.session_state.carga_auto = CARGA_UNIDADE
+            
+            # Selectbox com callback
+            item_sel = st.selectbox(
+                "📌 Selecione o ID_ITEM", 
+                opcoes_itens, 
+                key="item_lanc",
+                on_change=atualizar_info
+            )
+            
+            # Inicializar session state se necessário
+            if 'desc_auto' not in st.session_state:
+                if item_sel:
+                    produto_info = df_prod[df_prod['id_item'] == item_sel]
+                    if not produto_info.empty:
+                        info = produto_info.iloc[0]
+                        st.session_state.desc_auto = info['descricao']
+                        st.session_state.cli_auto = info['cliente']
+                        st.session_state.carga_auto = int(info['qtd_carga'])
+                    else:
+                        st.session_state.desc_auto = "N/A"
+                        st.session_state.cli_auto = "N/A"
+                        st.session_state.carga_auto = CARGA_UNIDADE
                 else:
-                    descricao_texto = "N/A"
-                    cliente_texto = "N/A"
-                    carga_sugerida = CARGA_UNIDADE
-            else:
-                descricao_texto = "N/A"
-                cliente_texto = "N/A"
-                carga_sugerida = CARGA_UNIDADE
+                    st.session_state.desc_auto = "N/A"
+                    st.session_state.cli_auto = "N/A"
+                    st.session_state.carga_auto = CARGA_UNIDADE
+            
+            # Recuperar valores do session state
+            descricao_texto = st.session_state.desc_auto
+            cliente_texto = st.session_state.cli_auto
+            carga_sugerida = st.session_state.carga_auto
             
             st.text_input("📝 Descrição do Produto", value=descricao_texto, disabled=True, key="desc_lanc")
         
@@ -398,52 +426,17 @@ with aba1:
                         )
                     conn.commit()
                 st.success("Lançamento concluído com sucesso!")
+                
+                # Limpar session state após lançar
+                for key in ['desc_auto', 'cli_auto', 'carga_auto']:
+                    if key in st.session_state:
+                        del st.session_state[key]
                 st.rerun()
             else:
                 if not op_num:
                     st.error("❌ Digite o número da OP!")
                 if not item_sel:
                     st.error("❌ Selecione um ID_ITEM!")
-
-with aba2: 
-    renderizar_setor(MAQUINAS_SERIGRAFIA, 450, -0.30)
-
-with aba3: 
-    renderizar_setor(MAQUINAS_SOPRO, 750, -0.45)
-
-with aba4:
-    st.subheader("⚙️ Gerenciamento e Reprogramação")
-    df_ger = carregar_dados()
-    if not df_ger.empty:
-        is_admin = st.session_state.user_email == ADMIN_EMAIL
-        for _, prod in df_ger[df_ger["status"].isin(["Pendente", "Setup"])].sort_values("inicio").iterrows():
-            with st.expander(f"📌 {prod['maquina']} | {prod['pedido']}"):
-                col1, col2, col3 = st.columns([2, 2, 1.2])
-                
-                if is_admin:
-                    n_data = col1.date_input("Nova Data", prod['inicio'].date(), key=f"d_{prod['id']}")
-                    n_hora = col2.time_input("Nova Hora", prod['inicio'].time(), key=f"t_{prod['id']}")
-                    if st.button("💾 Salvar Novo Horário", key=f"s_{prod['id']}"):
-                        novo_i = datetime.combine(n_data, n_hora)
-                        novo_f = novo_i + (prod['fim'] - prod['inicio'])
-                        with conectar() as c:
-                            c.execute("UPDATE agenda SET inicio=?, fim=? WHERE id=?", 
-                                     (novo_i.strftime('%Y-%m-%d %H:%M:%S'), 
-                                      novo_f.strftime('%Y-%m-%d %H:%M:%S'), prod['id']))
-                            c.commit()
-                        st.rerun()
-                
-                if col3.button("✅ Finalizar OP", key=f"ok_{prod['id']}", use_container_width=True):
-                    with conectar() as c: 
-                        c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (prod['id'],))
-                        c.commit()
-                    st.rerun()
-                if col3.button("🗑️ Deletar", key=f"del_{prod['id']}", use_container_width=True):
-                    with conectar() as c: 
-                        c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
-                        c.commit()
-                    st.rerun()
-
 with aba5: 
     st.dataframe(df_produtos, use_container_width=True)
 

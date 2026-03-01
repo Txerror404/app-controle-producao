@@ -340,11 +340,26 @@ with aba1:
         c1, c2 = st.columns(2)
         with c1:
             maq_sel = st.selectbox("🏭 Máquina destino", TODAS_MAQUINAS, key="maq_lanc")
+            
+            # Selectbox do ID_ITEM
             item_sel = st.selectbox("📌 Selecione o ID_ITEM", df_produtos['id_item'].tolist(), key="item_lanc")
-            info_prod = df_produtos[df_produtos['id_item'] == item_sel].iloc[0] if not df_produtos.empty else {}
-            desc_auto = info_prod.get('descricao', 'N/A')
-            cli_auto = info_prod.get('cliente', 'N/A')
-            carga_auto = info_prod.get('qtd_carga', CARGA_UNIDADE)
+            
+            # BUSCA AUTOMÁTICA DE DESCRIÇÃO E CLIENTE
+            if item_sel and not df_produtos.empty:
+                info_prod = df_produtos[df_produtos['id_item'] == item_sel]
+                if not info_prod.empty:
+                    info = info_prod.iloc[0]
+                    desc_auto = info.get('descricao', 'N/A')
+                    cli_auto = info.get('cliente', 'N/A')
+                    carga_auto = info.get('qtd_carga', CARGA_UNIDADE)
+                else:
+                    desc_auto = 'N/A'
+                    cli_auto = 'N/A'
+                    carga_auto = CARGA_UNIDADE
+            else:
+                desc_auto = 'N/A'
+                cli_auto = 'N/A'
+                carga_auto = CARGA_UNIDADE
             
             st.text_input("📝 Descrição do Produto", value=desc_auto, disabled=True, key="desc_lanc")
         
@@ -380,7 +395,6 @@ with aba1:
                     conn.commit()
                 st.success("Lançamento concluído com sucesso!")
                 st.rerun()
-
 # CHAMADAS DOS SETORES COM POSIÇÕES DIFERENTES
 with aba2: 
     renderizar_setor(MAQUINAS_SERIGRAFIA, 450, -0.30)

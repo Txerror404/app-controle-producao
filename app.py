@@ -26,17 +26,16 @@ agora = datetime.now(fuso_br).replace(tzinfo=None)
 
 GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
-st.markdown(f"""
-    <div style="background-color: #1E1E1E; padding: 8px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <h2 style="color: white; margin: 0; font-size: 20px; font-family: 'Segoe UI', sans-serif;">📊 PCP <span style="color: #FF4B4B;">|</span> CRONOGRAMA DE MÁQUINAS</h2>
-            <p style="color: #888; margin: 2px 0 0 0; font-size: 12px;">👤 Usuário: {st.session_state.user_email}</p>
-        </div>
-        <div style="text-align: center; border: 1px solid #FF4B4B; padding: 2px 15px; border-radius: 5px; background-color: #0E1117; min-width: 130px;">
-            <h3 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 22px; line-height: 1.2;">⏰ {agora.strftime('%H:%M:%S')}</h3>
-            <p style="color: #aaa; margin: -2px 0 2px 0; font-size: 12px; border-top: 1px dashed #FF4B4B; padding-top: 2px;">{agora.strftime('%d/%m/%Y')}</p>
-        </div>
-    </div>
+st.markdown("""
+    <style>
+        .block-container {padding-top: 0.5rem;}
+        .modebar-container { top: 0 !important; }
+        .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+        .stTabs [data-baseweb="tab"] { 
+            background-color: #1e1e1e; border-radius: 5px; padding: 5px 20px; color: white;
+        }
+        .stTabs [aria-selected="true"] { background-color: #FF4B4B !important; }
+    </style>
 """, unsafe_allow_html=True)
 
 # =================================================================
@@ -86,7 +85,7 @@ def proximo_horario(maq):
     return agora
 
 # =================================================================
-# 3. SEGURANÇA E CABEÇALHO (RESTAURADO)
+# 3. SEGURANÇA E CABEÇALHO (AJUSTADO - RELÓGIO CORRIGIDO)
 # =================================================================
 if "auth_ok" not in st.session_state: st.session_state.auth_ok = False
 if not st.session_state.auth_ok:
@@ -101,18 +100,19 @@ if not st.session_state.auth_ok:
 
 df_produtos = carregar_produtos_google()
 
+# CABEÇALHO CORRIGIDO - RELÓGIO COM DATA ABAIXO
 st.markdown(f"""
-    <div style="background-color: #1E1E1E; padding: 10px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+    <div style="background-color: #1E1E1E; padding: 8px 15px; border-radius: 8px; border-left: 8px solid #FF4B4B; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h2 style="color: white; margin: 0; font-size: 20px; font-family: 'Segoe UI', sans-serif;">📊 PCP <span style="color: #FF4B4B;">|</span> CRONOGRAMA DE MÁQUINAS</h2>
-            <p style="color: #888; margin: 0; font-size: 12px;">👤 Usuário: {st.session_state.user_email}</p>
+            <p style="color: #888; margin: 2px 0 0 0; font-size: 12px;">👤 Usuário: {st.session_state.user_email}</p>
         </div>
-        <div style="text-align: right; border: 1px solid #FF4B4B; padding: 2px 12px; border-radius: 5px; background-color: #0E1117;">
-            <h3 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 18px;">⏰ {agora.strftime('%H:%M:%S')}</h3>
-            <p style="color: #888; margin: 0; font-size: 10px;">{agora.strftime('%d/%m/%Y')}</p>
+        <div style="text-align: center; border: 1px solid #FF4B4B; padding: 2px 15px; border-radius: 5px; background-color: #0E1117; min-width: 130px;">
+            <h3 style="color: #FF4B4B; margin: 0; font-family: 'Courier New', Courier, monospace; font-size: 22px; line-height: 1.2;">⏰ {agora.strftime('%H:%M:%S')}</h3>
+            <p style="color: #aaa; margin: -2px 0 2px 0; font-size: 12px; border-top: 1px dashed #FF4B4B; padding-top: 2px;">{agora.strftime('%d/%m/%Y')}</p>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # =================================================================
 # 4. GRÁFICOS E STATUS (RESTAURADO)

@@ -1,22 +1,25 @@
-from datetime import datetime
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-from utils import cor_por_status, formatar_data_br
 
 
 # ==============================
 # GERAR DATAFRAME PARA GANTT
 # ==============================
 def gerar_dataframe(eventos):
+
     if not eventos:
         return pd.DataFrame()
 
     dados = []
 
     for e in eventos:
-        inicio = datetime.fromisoformat(e["inicio"])
-        fim = datetime.fromisoformat(e["fim"])
+
+        # Converter datas (SQLite salva como string)
+        inicio = datetime.fromisoformat(str(e["inicio"]))
+        fim = datetime.fromisoformat(str(e["fim"]))
+
+        duracao = (fim - inicio).total_seconds() / 3600
 
         dados.append({
             "ID": e["id"],
@@ -29,10 +32,7 @@ def gerar_dataframe(eventos):
             "Fim": fim,
             "Status": e["status"],
             "Observação": e["observacao"],
-            "Cor": cor_por_status(e["status"]),
-            "Duração (h)": round((fim - inicio).total_seconds() / 3600, 2),
-            "Início Formatado": formatar_data_br(inicio),
-            "Fim Formatado": formatar_data_br(fim)
+            "Duração (h)": round(duracao, 2)
         })
 
     return pd.DataFrame(dados)
@@ -41,10 +41,12 @@ def gerar_dataframe(eventos):
 # ==============================
 # EXIBIR GANTT
 # ==============================
-def exibir_gantt(eventos, st):
+def exibir_gantt(eventos):
+
     df = gerar_dataframe(eventos)
 
     if df.empty:
+        import streamlit as st
         st.info("Nenhuma ordem cadastrada.")
         return
 
@@ -61,13 +63,12 @@ def exibir_gantt(eventos, st):
             "Setor",
             "Status",
             "Duração (h)",
-            "Início Formatado",
-            "Fim Formatado",
             "Observação"
         ]
     )
 
     fig.update_traces(marker=dict(line=dict(width=1, color="black")))
+
     fig.update_layout(
         height=600,
         yaxis_title="Máquina",
@@ -78,4 +79,5 @@ def exibir_gantt(eventos, st):
 
     fig.update_yaxes(autorange="reversed")
 
+    import streamlit as st
     st.plotly_chart(fig, use_container_width=True)

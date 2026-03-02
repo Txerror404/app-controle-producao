@@ -15,23 +15,27 @@ def gerar_dataframe_exportacao(eventos):
     dados = []
 
     for e in eventos:
-        inicio = datetime.fromisoformat(e["inicio"])
-        fim = datetime.fromisoformat(e["fim"])
+
+        inicio = datetime.fromisoformat(str(e["inicio"]))
+        fim = datetime.fromisoformat(str(e["fim"]))
 
         duracao = (fim - inicio).total_seconds() / 3600
 
         dados.append({
             "ID": e["id"],
+            "OP": e["op"],
+            "Cliente": e["cliente"],
+            "Produto": e["produto"],
             "Máquina": e["maquina"],
-            "Descrição": e["descricao"],
+            "Setor": e["setor"],
             "Status": e["status"],
             "Início": inicio,
             "Fim": fim,
-            "Duração (h)": round(duracao, 2)
+            "Duração (h)": round(duracao, 2),
+            "Observação": e["observacao"]
         })
 
-    df = pd.DataFrame(dados)
-    return df
+    return pd.DataFrame(dados)
 
 
 # ==============================

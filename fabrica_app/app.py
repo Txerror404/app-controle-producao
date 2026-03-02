@@ -1,4 +1,4 @@
-from fabrica_app.db import (
+from db import (
     criar_tabelas,
     inserir_evento,
     listar_eventos,
@@ -6,10 +6,10 @@ from fabrica_app.db import (
     soft_delete
 )
 
-from fabrica_app.utils import verificar_conflito
-from fabrica_app.gantt import exibir_gantt
-from fabrica_app.metrics import exibir_metricas
-from fabrica_app.sheets import botao_exportar_excel
+from utils import verificar_conflito
+from gantt import exibir_gantt
+from metrics import exibir_metricas
+from sheets import botao_exportar_excel
 
 
 st.set_page_config(

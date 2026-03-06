@@ -1,83 +1,32 @@
-import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import timedelta
 
+def gerar_gantt(df, maquinas, agora):
 
-# ==============================
-# GERAR DATAFRAME PARA GANTT
-# ==============================
-def gerar_dataframe(eventos):
+    df_g = df[df["maquina"].isin(maquinas)].copy()
 
-    if not eventos:
-        return pd.DataFrame()
+    df_g["status_cor"] = df_g["status"]
 
-    dados = []
-
-    for e in eventos:
-
-        # Converter datas (SQLite salva como string)
-        inicio = datetime.fromisoformat(str(e["inicio"]))
-        fim = datetime.fromisoformat(str(e["fim"]))
-
-        duracao = (fim - inicio).total_seconds() / 3600
-
-        dados.append({
-            "ID": e["id"],
-            "OP": e["op"],
-            "Cliente": e["cliente"],
-            "Produto": e["produto"],
-            "Máquina": e["maquina"],
-            "Setor": e["setor"],
-            "Início": inicio,
-            "Fim": fim,
-            "Status": e["status"],
-            "Observação": e["observacao"],
-            "Duração (h)": round(duracao, 2)
-        })
-
-    return pd.DataFrame(dados)
-
-
-# ==============================
-# EXIBIR GANTT
-# ==============================
-def exibir_gantt(eventos):
-
-    df = gerar_dataframe(eventos)
-
-    if df.empty:
-        import streamlit as st
-        st.info("Nenhuma ordem cadastrada.")
-        return
+    df_g.loc[
+        (df_g["inicio"] <= agora)
+        & (df_g["fim"] >= agora)
+        & (df_g["status"]=="Pendente"),
+        "status_cor"
+    ]="Executando"
 
     fig = px.timeline(
-        df,
-        x_start="Início",
-        x_end="Fim",
-        y="Máquina",
-        color="Status",
-        hover_data=[
-            "OP",
-            "Cliente",
-            "Produto",
-            "Setor",
-            "Status",
-            "Duração (h)",
-            "Observação"
-        ]
-    )
-
-    fig.update_traces(marker=dict(line=dict(width=1, color="black")))
-
-    fig.update_layout(
-        height=600,
-        yaxis_title="Máquina",
-        xaxis_title="Período",
-        legend_title="Status",
-        template="plotly_white"
+        df_g,
+        x_start="inicio",
+        x_end="fim",
+        y="maquina",
+        color="status_cor",
+        text="rotulo_barra"
     )
 
     fig.update_yaxes(autorange="reversed")
 
-    import streamlit as st
-    st.plotly_chart(fig, use_container_width=True)
+    fig.update_xaxes(
+        range=[agora - timedelta(hours=2), agora + timedelta(hours=36)]
+    )
+
+    return fig

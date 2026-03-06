@@ -1,3 +1,4 @@
+from db import criar_tabela, carregar_dados
 import streamlit as st
 import pandas as pd
 import plotly.express as px

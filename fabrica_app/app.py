@@ -1,5 +1,8 @@
-from db import criar_tabela, carregar_dados
 import streamlit as st
+
+from fabrica_app.db import criar_tabela, carregar_dados
+from fabrica_app.sheets import carregar_produtos_google
+
 import pandas as pd
 import plotly.express as px
 import sqlite3
@@ -7,11 +10,12 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-from sheets import carregar_produtos_google
-
 # =================================================================
 # 1. CONFIGURAÇÕES GERAIS E ESTILO
 # =================================================================
+
+criar_tabela()
+
 st.set_page_config(page_title="PCP Industrial - SISTEMA COMPLETO", layout="wide")
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 

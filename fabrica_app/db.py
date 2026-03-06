@@ -1,133 +1,180 @@
 import sqlite3
-from contextlib import contextmanager
+import pandas as pd
+from datetime import datetime
 
-DB_NAME = "pcp.db"
+DB_FILE = "pcp.db"
 
 
-# ==============================
-# CONEXÃO SEGURA
-# ==============================
-@contextmanager
+# ===============================
+# CONEXÃO
+# ===============================
 def conectar():
-    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
+    return sqlite3.connect(DB_FILE, check_same_thread=False)
 
 
-# ==============================
-# CRIAR TABELAS + ÍNDICES
-# ==============================
-def criar_tabelas():
+# ===============================
+# CRIAR TABELA
+# ===============================
+def criar_tabela():
+
     with conectar() as conn:
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS agenda (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            op TEXT NOT NULL,
-            cliente TEXT,
-            produto TEXT,
-            maquina TEXT NOT NULL,
-            setor TEXT,
-            inicio DATETIME NOT NULL,
-            fim DATETIME NOT NULL,
-            status TEXT DEFAULT 'Pendente',
-            observacao TEXT,
-            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agenda (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                maquina TEXT,
+                pedido TEXT,
+                item TEXT,
+                inicio TEXT,
+                fim TEXT,
+                status TEXT,
+                qtd REAL,
+                vinculo_id INTEGER
+            )
+            """
         )
-        """)
 
-        # Índices para performance
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_maquina ON agenda(maquina)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_inicio ON agenda(inicio)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON agenda(status)")
+
+# ===============================
+# CARREGAR DADOS
+# ===============================
+def carregar_dados():
+
+    conn = conectar()
+
+    df = pd.read_sql_query("SELECT * FROM agenda", conn)
+
+    conn.close()
+
+    if not df.empty:
+
+        df["inicio"] = pd.to_datetime(df["inicio"])
+        df["fim"] = pd.to_datetime(df["fim"])
+        df["qtd"] = pd.to_numeric(df["qtd"], errors="coerce").fillna(0)
+
+        df["rotulo_barra"] = df.apply(
+            lambda r: "🔧 SETUP"
+            if r["status"] == "Setup"
+            else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}",
+            axis=1,
+        )
+
+    return df
+
+
+# ===============================
+# INSERIR PRODUÇÃO
+# ===============================
+def inserir_producao(
+    maquina,
+    pedido,
+    item,
+    inicio,
+    fim,
+    qtd,
+):
+
+    with conectar() as conn:
+
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            INSERT INTO agenda
+            (maquina, pedido, item, inicio, fim, status, qtd)
+            VALUES (?,?,?,?,?,?,?)
+            """,
+            (
+                maquina,
+                pedido,
+                item,
+                inicio,
+                fim,
+                "Pendente",
+                qtd,
+            ),
+        )
+
+        conn.commit()
+
+        return cur.lastrowid
+
+
+# ===============================
+# INSERIR SETUP
+# ===============================
+def inserir_setup(
+    maquina,
+    pedido,
+    inicio,
+    fim,
+    vinculo_id,
+):
+
+    with conectar() as conn:
+
+        conn.execute(
+            """
+            INSERT INTO agenda
+            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (
+                maquina,
+                pedido,
+                "Ajuste",
+                inicio,
+                fim,
+                "Setup",
+                0,
+                vinculo_id,
+            ),
+        )
+
         conn.commit()
 
 
-# ==============================
-# INSERIR EVENTO
-# ==============================
-def inserir_evento(op, cliente, produto, maquina, setor, inicio, fim, status="Pendente", observacao=""):
+# ===============================
+# FINALIZAR OP
+# ===============================
+def finalizar_op(op_id):
+
     with conectar() as conn:
-        conn.execute("""
-        INSERT INTO agenda
-        (op, cliente, produto, maquina, setor, inicio, fim, status, observacao)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (op, cliente, produto, maquina, setor, inicio, fim, status, observacao))
+
+        conn.execute(
+            "UPDATE agenda SET status='Concluído' WHERE id=?",
+            (op_id,),
+        )
+
         conn.commit()
 
 
-# ==============================
-# ATUALIZAR EVENTO COMPLETO
-# ==============================
-def atualizar_evento(id_evento, op, cliente, produto, maquina, setor, inicio, fim, status, observacao):
+# ===============================
+# DELETAR OP
+# ===============================
+def deletar_op(op_id):
+
     with conectar() as conn:
-        conn.execute("""
-        UPDATE agenda
-        SET op=?, cliente=?, produto=?, maquina=?, setor=?,
-            inicio=?, fim=?, status=?, observacao=?
-        WHERE id=?
-        """, (op, cliente, produto, maquina, setor,
-              inicio, fim, status, observacao, id_evento))
+
+        conn.execute(
+            "DELETE FROM agenda WHERE id=? OR vinculo_id=?",
+            (op_id, op_id),
+        )
+
         conn.commit()
 
 
-# ==============================
-# ATUALIZAR STATUS
-# ==============================
-def atualizar_status(id_evento, novo_status):
+# ===============================
+# REPROGRAMAR
+# ===============================
+def atualizar_horario(op_id, inicio, fim):
+
     with conectar() as conn:
-        conn.execute("""
-        UPDATE agenda
-        SET status=?
-        WHERE id=?
-        """, (novo_status, id_evento))
-        conn.commit()
 
+        conn.execute(
+            "UPDATE agenda SET inicio=?, fim=? WHERE id=?",
+            (inicio, fim, op_id),
+        )
 
-# ==============================
-# SOFT DELETE (INDUSTRIAL)
-# ==============================
-def soft_delete(id_evento):
-    with conectar() as conn:
-        conn.execute("""
-        UPDATE agenda
-        SET status='Cancelado'
-        WHERE id=?
-        """, (id_evento,))
-        conn.commit()
-
-
-# ==============================
-# LISTAR EVENTOS ATIVOS
-# ==============================
-def listar_eventos():
-    with conectar() as conn:
-        eventos = conn.execute("""
-        SELECT * FROM agenda
-        WHERE status != 'Cancelado'
-        ORDER BY inicio
-        """).fetchall()
-    return eventos
-
-
-# ==============================
-# BUSCAR POR ID
-# ==============================
-def buscar_evento_por_id(id_evento):
-    with conectar() as conn:
-        evento = conn.execute("""
-        SELECT * FROM agenda
-        WHERE id=?
-        """, (id_evento,)).fetchone()
-    return evento
-
-
-# ==============================
-# RESETAR FÁBRICA (CUIDADO)
-# ==============================
-def apagar_tudo():
-    with conectar() as conn:
-        conn.execute("DELETE FROM agenda")
         conn.commit()

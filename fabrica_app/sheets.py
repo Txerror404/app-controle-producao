@@ -1,64 +1,22 @@
 import pandas as pd
-from datetime import datetime
 import streamlit as st
-import io
+
+CARGA_UNIDADE = 49504
+GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
 
-# ==============================
-# CONVERTER EVENTOS PARA DATAFRAME
-# ==============================
-def gerar_dataframe_exportacao(eventos):
-
-    if not eventos:
-        return pd.DataFrame()
-
-    dados = []
-
-    for e in eventos:
-
-        inicio = datetime.fromisoformat(str(e["inicio"]))
-        fim = datetime.fromisoformat(str(e["fim"]))
-
-        duracao = (fim - inicio).total_seconds() / 3600
-
-        dados.append({
-            "ID": e["id"],
-            "OP": e["op"],
-            "Cliente": e["cliente"],
-            "Produto": e["produto"],
-            "Máquina": e["maquina"],
-            "Setor": e["setor"],
-            "Status": e["status"],
-            "Início": inicio,
-            "Fim": fim,
-            "Duração (h)": round(duracao, 2),
-            "Observação": e["observacao"]
-        })
-
-    return pd.DataFrame(dados)
-
-
-# ==============================
-# BOTÃO DE EXPORTAÇÃO
-# ==============================
-def botao_exportar_excel(eventos):
-
-    df = gerar_dataframe_exportacao(eventos)
-
-    if df.empty:
-        st.info("Sem dados para exportar.")
-        return
-
-    output = io.BytesIO()
-
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Produção")
-
-    output.seek(0)
-
-    st.download_button(
-        label="📥 Baixar Excel",
-        data=output,
-        file_name="controle_producao.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+@st.cache_data(ttl=600)
+def carregar_produtos_google():
+    try:
+        df = pd.read_csv(GOOGLE_SHEETS_URL)
+        df.columns = df.columns.str.strip()
+        df["id_item"] = df["ID_ITEM"].astype(str).str.strip()
+        df["descricao"] = df["DESCRIÇÃO_1"].astype(str).str.strip()
+        df["cliente"] = df["CLIENTE"].astype(str).str.strip()
+        df["qtd_carga"] = pd.to_numeric(
+            df["QTD/CARGA"].astype(str).str.replace(",", "."),
+            errors="coerce"
+        ).fillna(CARGA_UNIDADE)
+        return df.fillna("N/A")
+    except Exception:
+        return pd.DataFrame(columns=["id_item", "descricao", "cliente", "qtd_carga"])

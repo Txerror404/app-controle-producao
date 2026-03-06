@@ -7,7 +7,7 @@ from db import (
     listar_eventos,
     soft_delete
 )
-
+from sheets import carregar_produtos_google
 from utils import verificar_conflito
 from gantt import exibir_gantt
 from metrics import exibir_metricas

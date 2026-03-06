@@ -1,5 +1,6 @@
 import streamlit as st
 
+from fabrica_app.utils import verificar_conflito
 from fabrica_app.db import criar_tabela, carregar_dados
 from fabrica_app.sheets import carregar_produtos_google
 

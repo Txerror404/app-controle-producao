@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
+
 # =================================================================
 # DEFINIÇÃO DO BANCO
 # =================================================================
@@ -19,7 +20,36 @@ else:
 
 
 # =================================================================
-# BACKUP DO BANCO
+# CONEXÃO COM BANCO
+# =================================================================
+
+def conectar():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+
+# =================================================================
+# CRIAÇÃO DA TABELA (PROTEÇÃO DE HISTÓRICO)
+# =================================================================
+
+with conectar() as conn:
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS agenda (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            maquina TEXT,
+            pedido TEXT,
+            item TEXT,
+            inicio TEXT,
+            fim TEXT,
+            status TEXT,
+            qtd REAL,
+            vinculo_id INTEGER
+        )
+    """)
+
+
+# =================================================================
+# BACKUP AUTOMÁTICO DO BANCO
 # =================================================================
 
 def backup_banco():
@@ -28,20 +58,31 @@ def backup_banco():
 
         if os.path.exists(DB_PATH):
 
-            pasta_backup = "/mount/data"
-
             nome = datetime.now().strftime("backup_%Y%m%d.db")
 
-            destino = os.path.join(pasta_backup, nome)
+            destino = os.path.join("/mount/data", nome)
 
             if not os.path.exists(destino):
 
                 shutil.copy(DB_PATH, destino)
 
-    except PermissionError:
-
-        # se não puder criar backup, não quebra o sistema
+    except:
         pass
+
+
+backup_banco()
+
+
+# =================================================================
+# CONFIGURAÇÕES GERAIS DO SISTEMA
+# =================================================================
+
+st.set_page_config(
+    page_title="PCP Industrial - SISTEMA COMPLETO",
+    layout="wide"
+)
+
+st_autorefresh(interval=120000, key="pcp_refresh_global")
 # =================================================================
 # BUSCAR DESCRIÇÃO DO PRODUTO
 # =================================================================

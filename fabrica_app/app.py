@@ -7,8 +7,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
-import time
-time.sleep(5)
+
 
 # =================================================================
 # CONFIGURAÇÃO DA PÁGINA (PRECISA SER O PRIMEIRO COMANDO STREAMLIT)
@@ -19,61 +18,24 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # =================================================================
 # DEFINIÇÃO DO BANCO PERSISTENTE
 # =================================================================
 
 DB_PATH = "/mount/data/pcp.db"
 
-def conectar():
-
-    try:
-        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-        return conn
-
-    except sqlite3.OperationalError as e:
-        st.error(f"Erro ao acessar banco persistente: {e}")
-        st.stop()
-
 
 # =================================================================
-# CONEXÃO COM BANCO
+# FUNÇÃO DE CONEXÃO
 # =================================================================
 
 def conectar():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-    try:
-        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-        return conn
 
-    except sqlite3.OperationalError:
-
-        # fallback caso /mount/data não esteja disponível
-        fallback = "pcp.db"
-        st.warning("Banco persistente indisponível, usando banco temporário.")
-        return sqlite3.connect(fallback, check_same_thread=False)
-
-try:
-    with conectar() as conn:
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS agenda (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                maquina TEXT,
-                pedido TEXT,
-                item TEXT,
-                inicio TEXT,
-                fim TEXT,
-                status TEXT,
-                qtd REAL,
-                vinculo_id INTEGER
-            )
-        """)
-
-except Exception as e:
-    st.error(f"Erro ao inicializar banco: {e}")
 # =================================================================
-# CRIAÇÃO DA TABELA (PROTEÇÃO DE HISTÓRICO)
+# CRIAÇÃO DA TABELA (SE NÃO EXISTIR)
 # =================================================================
 
 with conectar() as conn:
@@ -123,7 +85,6 @@ backup_banco()
 # =================================================================
 
 st_autorefresh(interval=120000, key="pcp_refresh_global")
-
 
 # =================================================================
 # BUSCAR DESCRIÇÃO DO PRODUTO

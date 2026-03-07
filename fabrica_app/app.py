@@ -20,12 +20,20 @@ st.set_page_config(
 )
 
 # =================================================================
-# DEFINIÇÃO DO BANCO
+# DEFINIÇÃO DO BANCO PERSISTENTE
 # =================================================================
 
 DB_PATH = "/mount/data/pcp.db"
 
-st.write("Banco utilizado:", DB_PATH)
+def conectar():
+
+    try:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        return conn
+
+    except sqlite3.OperationalError as e:
+        st.error(f"Erro ao acessar banco persistente: {e}")
+        st.stop()
 
 
 # =================================================================

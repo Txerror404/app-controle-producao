@@ -41,6 +41,35 @@ def conectar():
 
 
 # =================================================================
+# VERIFICAR ESTRUTURA DA TABELA
+# =================================================================
+
+def verificar_estrutura_tabela():
+    """Verifica quais colunas existem na tabela agenda"""
+    try:
+        conn = conectar()
+        cur = conn.cursor()
+        
+        # Consulta para obter informações das colunas
+        cur.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'agenda'
+            ORDER BY ordinal_position
+        """)
+        
+        colunas = [row[0] for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        st.sidebar.success(f"Colunas encontradas: {', '.join(colunas)}")
+        return colunas
+    except Exception as e:
+        st.sidebar.error(f"Erro ao verificar estrutura: {e}")
+        return []
+
+
+# =================================================================
 # TESTE DE CONEXÃO
 # =================================================================
 
@@ -49,38 +78,6 @@ try:
     conn.close()
 except Exception as e:
     st.error(f"Falha na conexão com Supabase: {e}")
-    st.stop()
-
-
-# =================================================================
-# CRIAÇÃO DA TABELA (CASO NÃO EXISTA)
-# =================================================================
-
-try:
-    conn = conectar()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS agenda (
-            id SERIAL PRIMARY KEY,
-            maquina TEXT,
-            pedido TEXT,
-            item TEXT,
-            inicio TIMESTAMP,
-            fim TIMESTAMP,
-            status TEXT,
-            qtd NUMERIC,
-            vinculo_id INTEGER,
-            criado_por TEXT,
-            criado_em TIMESTAMP,
-            alterado_por TEXT,
-            alterado_em TIMESTAMP
-        )
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
-except Exception as e:
-    st.error(f"Erro ao criar tabela: {e}")
     st.stop()
 
 
@@ -171,7 +168,8 @@ def carregar_produtos_google():
             errors='coerce'
         ).fillna(CARGA_UNIDADE)
         return df.fillna('N/A')
-    except Exception:
+    except Exception as e:
+        st.error(f"Erro ao carregar produtos: {e}")
         return pd.DataFrame(columns=['id_item','descricao','cliente','qtd_carga'])
 
 
@@ -214,67 +212,107 @@ def proximo_horario(maq):
 
 
 # =================================================================
-# INSERIR PRODUÇÃO
+# INSERIR PRODUÇÃO - VERSÃO CORRIGIDA
 # =================================================================
 
-def inserir_producao(maquina,pedido,item,inicio,fim,qtd,usuario):
+def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
     conn = conectar()
     cur = conn.cursor()
-    cur.execute(
+    
+    try:
+        # Primeiro, vamos verificar quais colunas existem
+        cur.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'agenda'
+        """)
+        colunas_existentes = [row[0] for row in cur.fetchall()]
+        
+        # Construir a query dinamicamente baseada nas colunas existentes
+        colunas = ['maquina', 'pedido', 'item', 'inicio', 'fim', 'status', 'qtd']
+        valores = [maquina, pedido, item, inicio, fim, 'Pendente', qtd]
+        
+        # Adicionar colunas opcionais se existirem
+        if 'criado_por' in colunas_existentes:
+            colunas.append('criado_por')
+            valores.append(usuario)
+        
+        if 'criado_em' in colunas_existentes:
+            colunas.append('criado_em')
+            valores.append(agora)
+        
+        # Construir a query SQL
+        placeholders = ','.join(['%s'] * len(colunas))
+        colunas_str = ','.join(colunas)
+        
+        query = f"""
+            INSERT INTO agenda ({colunas_str})
+            VALUES ({placeholders})
+            RETURNING id
         """
-        INSERT INTO agenda
-        (maquina,pedido,item,inicio,fim,status,qtd,criado_por,criado_em)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        RETURNING id
-        """,
-        (
-            maquina,
-            pedido,
-            item,
-            inicio,
-            fim,
-            "Pendente",
-            qtd,
-            usuario,
-            agora
-        )
-    )
-    producao_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
-    return producao_id
+        
+        cur.execute(query, valores)
+        producao_id = cur.fetchone()[0]
+        conn.commit()
+        
+        return producao_id
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao inserir produção: {e}")
+        raise e
+    finally:
+        cur.close()
+        conn.close()
 
 
 # =================================================================
-# INSERIR SETUP
+# INSERIR SETUP - VERSÃO CORRIGIDA
 # =================================================================
 
-def inserir_setup(maquina,pedido,inicio,fim,vinculo,usuario):
+def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
     conn = conectar()
     cur = conn.cursor()
-    cur.execute(
+    
+    try:
+        # Verificar colunas existentes
+        cur.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'agenda'
+        """)
+        colunas_existentes = [row[0] for row in cur.fetchall()]
+        
+        # Construir query dinamicamente
+        colunas = ['maquina', 'pedido', 'item', 'inicio', 'fim', 'status', 'qtd', 'vinculo_id']
+        valores = [maquina, pedido, "Ajuste", inicio, fim, "Setup", 0, vinculo]
+        
+        if 'criado_por' in colunas_existentes:
+            colunas.append('criado_por')
+            valores.append(usuario)
+        
+        if 'criado_em' in colunas_existentes:
+            colunas.append('criado_em')
+            valores.append(agora)
+        
+        placeholders = ','.join(['%s'] * len(colunas))
+        colunas_str = ','.join(colunas)
+        
+        query = f"""
+            INSERT INTO agenda ({colunas_str})
+            VALUES ({placeholders})
         """
-        INSERT INTO agenda
-        (maquina,pedido,item,inicio,fim,status,qtd,vinculo_id,criado_por,criado_em)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """,
-        (
-            maquina,
-            pedido,
-            "Ajuste",
-            inicio,
-            fim,
-            "Setup",
-            0,
-            vinculo,
-            usuario,
-            agora
-        )
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+        
+        cur.execute(query, valores)
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao inserir setup: {e}")
+        raise e
+    finally:
+        cur.close()
+        conn.close()
 
 
 # =================================================================
@@ -316,26 +354,41 @@ def deletar_op(id_op):
 def reprogramar_op(id_op,novo_inicio,novo_fim,usuario):
     conn = conectar()
     cur = conn.cursor()
-    cur.execute(
-        """
-        UPDATE agenda
-        SET inicio=%s,
-            fim=%s,
-            alterado_por=%s,
-            alterado_em=%s
-        WHERE id=%s
-        """,
-        (
-            novo_inicio,
-            novo_fim,
-            usuario,
-            agora,
-            id_op
-        )
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    
+    try:
+        # Verificar colunas existentes
+        cur.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'agenda'
+        """)
+        colunas_existentes = [row[0] for row in cur.fetchall()]
+        
+        # Construir query base
+        query = "UPDATE agenda SET inicio=%s, fim=%s"
+        params = [novo_inicio, novo_fim]
+        
+        if 'alterado_por' in colunas_existentes:
+            query += ", alterado_por=%s"
+            params.append(usuario)
+        
+        if 'alterado_em' in colunas_existentes:
+            query += ", alterado_em=%s"
+            params.append(agora)
+        
+        query += " WHERE id=%s"
+        params.append(id_op)
+        
+        cur.execute(query, params)
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao reprogramar: {e}")
+        raise e
+    finally:
+        cur.close()
+        conn.close()
 
 
 # =================================================================
@@ -367,6 +420,19 @@ if 'df_produtos' not in st.session_state:
         st.session_state.df_produtos = carregar_produtos_google()
 
 df_produtos = st.session_state.df_produtos
+
+
+# =================================================================
+# MOSTRAR ESTRUTURA DA TABELA (APENAS PARA DEBUG)
+# =================================================================
+
+with st.sidebar:
+    st.title("🔧 Diagnóstico")
+    if st.button("Verificar estrutura da tabela"):
+        colunas = verificar_estrutura_tabela()
+        if colunas:
+            st.success(f"Colunas encontradas: {len(colunas)}")
+            st.write(colunas)
 
 
 # =================================================================
@@ -731,18 +797,23 @@ with tab3:
                     hours=qtd_lanc / CADENCIA_PADRAO
                 )
                 
-                inserir_producao(
-                    maq_sel,
-                    f"{cliente_texto} | OP:{op_num}",
-                    item_sel,
-                    inicio_dt,
-                    fim_dt,
-                    qtd_lanc,
-                    st.session_state.user_email
-                )
-                
-                st.success("OP lançada com sucesso!")
-                st.rerun()
+                try:
+                    inserir_producao(
+                        maq_sel,
+                        f"{cliente_texto} | OP:{op_num}",
+                        item_sel,
+                        inicio_dt,
+                        fim_dt,
+                        qtd_lanc,
+                        st.session_state.user_email
+                    )
+                    
+                    st.success("✅ OP lançada com sucesso!")
+                    st.balloons()
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Erro ao lançar OP: {e}")
             else:
                 st.error("Preencha OP e Item")
 
@@ -761,32 +832,37 @@ with tab4:
             df_ger["status"].isin(["Pendente","Setup","Manutenção"])
         ].sort_values("inicio")
         
-        for _, prod in df_programadas.iterrows():
-            with st.expander(
-                f"{prod['maquina']} | {prod['pedido']} | Início: {prod['inicio'].strftime('%d/%m %H:%M')}"
-            ):
-                st.write("**Item:**", prod["item"])
-                st.write("**Quantidade:**", int(prod["qtd"]))
-                st.write("**Início:**", prod["inicio"].strftime('%d/%m/%Y %H:%M'))
-                st.write("**Fim:**", prod["fim"].strftime('%d/%m/%Y %H:%M'))
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.button(
-                        "✅ Finalizar",
-                        key=f"ok_{prod['id']}"
-                    ):
-                        finalizar_op(prod["id"])
-                        st.rerun()
-                
-                with col2:
-                    if st.button(
-                        "🗑️ Deletar",
-                        key=f"del_{prod['id']}"
-                    ):
-                        deletar_op(prod["id"])
-                        st.rerun()
+        if not df_programadas.empty:
+            for _, prod in df_programadas.iterrows():
+                with st.expander(
+                    f"{prod['maquina']} | {prod['pedido']} | Início: {prod['inicio'].strftime('%d/%m %H:%M')}"
+                ):
+                    st.write("**Item:**", prod["item"])
+                    st.write("**Quantidade:**", int(prod["qtd"]) if pd.notna(prod["qtd"]) else 0)
+                    st.write("**Início:**", prod["inicio"].strftime('%d/%m/%Y %H:%M'))
+                    st.write("**Fim:**", prod["fim"].strftime('%d/%m/%Y %H:%M'))
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button(
+                            "✅ Finalizar",
+                            key=f"ok_{prod['id']}"
+                        ):
+                            finalizar_op(prod["id"])
+                            st.success("OP finalizada!")
+                            st.rerun()
+                    
+                    with col2:
+                        if st.button(
+                            "🗑️ Deletar",
+                            key=f"del_{prod['id']}"
+                        ):
+                            deletar_op(prod["id"])
+                            st.success("OP deletada!")
+                            st.rerun()
+        else:
+            st.info("Nenhuma OP pendente encontrada")
     else:
         st.info("Nenhuma OP cadastrada")
 
@@ -797,11 +873,14 @@ with tab4:
 
 with tab5:
     st.subheader("📋 Produtos")
-    st.dataframe(
-        df_produtos,
-        use_container_width=True,
-        hide_index=True
-    )
+    if not df_produtos.empty:
+        st.dataframe(
+            df_produtos,
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.warning("Nenhum produto carregado do Google Sheets")
 
 
 # =================================================================
@@ -851,5 +930,5 @@ with tab6:
 
 st.divider()
 st.caption(
-    "v7.1 | Industrial By William | PCP Serigrafia + Sopro | Supabase Edition"
+    "v7.2 | Industrial By William | PCP Serigrafia + Sopro | Supabase Edition"
 )

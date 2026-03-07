@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import sqlite3
+import psycopg2
 from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh

@@ -41,35 +41,6 @@ def conectar():
 
 
 # =================================================================
-# VERIFICAR ESTRUTURA DA TABELA
-# =================================================================
-
-def verificar_estrutura_tabela():
-    """Verifica quais colunas existem na tabela agenda"""
-    try:
-        conn = conectar()
-        cur = conn.cursor()
-        
-        # Consulta para obter informações das colunas
-        cur.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'agenda'
-            ORDER BY ordinal_position
-        """)
-        
-        colunas = [row[0] for row in cur.fetchall()]
-        cur.close()
-        conn.close()
-        
-        st.sidebar.success(f"Colunas encontradas: {', '.join(colunas)}")
-        return colunas
-    except Exception as e:
-        st.sidebar.error(f"Erro ao verificar estrutura: {e}")
-        return []
-
-
-# =================================================================
 # TESTE DE CONEXÃO
 # =================================================================
 
@@ -78,6 +49,38 @@ try:
     conn.close()
 except Exception as e:
     st.error(f"Falha na conexão com Supabase: {e}")
+    st.stop()
+
+
+# =================================================================
+# CRIAÇÃO DA TABELA (CASO NÃO EXISTA)
+# =================================================================
+
+try:
+    conn = conectar()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS agenda (
+            id SERIAL PRIMARY KEY,
+            maquina TEXT,
+            pedido TEXT,
+            item TEXT,
+            inicio TIMESTAMP,
+            fim TIMESTAMP,
+            status TEXT,
+            qtd NUMERIC,
+            vinculo_id INTEGER,
+            criado_por TEXT,
+            criado_em TIMESTAMP,
+            alterado_por TEXT,
+            alterado_em TIMESTAMP
+        )
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+except Exception as e:
+    st.error(f"Erro ao criar tabela: {e}")
     st.stop()
 
 
@@ -168,8 +171,7 @@ def carregar_produtos_google():
             errors='coerce'
         ).fillna(CARGA_UNIDADE)
         return df.fillna('N/A')
-    except Exception as e:
-        st.error(f"Erro ao carregar produtos: {e}")
+    except Exception:
         return pd.DataFrame(columns=['id_item','descricao','cliente','qtd_carga'])
 
 
@@ -212,7 +214,7 @@ def proximo_horario(maq):
 
 
 # =================================================================
-# INSERIR PRODUÇÃO - VERSÃO CORRIGIDA
+# INSERIR PRODUÇÃO - CORRIGIDO
 # =================================================================
 
 def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
@@ -220,7 +222,7 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
     cur = conn.cursor()
     
     try:
-        # Primeiro, vamos verificar quais colunas existem
+        # Verificar quais colunas existem
         cur.execute("""
             SELECT column_name 
             FROM information_schema.columns 
@@ -228,46 +230,62 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
         """)
         colunas_existentes = [row[0] for row in cur.fetchall()]
         
-        # Construir a query dinamicamente baseada nas colunas existentes
-        colunas = ['maquina', 'pedido', 'item', 'inicio', 'fim', 'status', 'qtd']
-        valores = [maquina, pedido, item, inicio, fim, 'Pendente', qtd]
+        # Construir query baseada nas colunas existentes
+        if 'criado_por' in colunas_existentes and 'criado_em' in colunas_existentes:
+            cur.execute(
+                """
+                INSERT INTO agenda
+                (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+                """,
+                (
+                    maquina,
+                    pedido,
+                    item,
+                    inicio,
+                    fim,
+                    "Pendente",
+                    qtd,
+                    usuario,
+                    agora
+                )
+            )
+        else:
+            # Versão sem os campos de auditoria
+            cur.execute(
+                """
+                INSERT INTO agenda
+                (maquina, pedido, item, inicio, fim, status, qtd)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+                """,
+                (
+                    maquina,
+                    pedido,
+                    item,
+                    inicio,
+                    fim,
+                    "Pendente",
+                    qtd
+                )
+            )
         
-        # Adicionar colunas opcionais se existirem
-        if 'criado_por' in colunas_existentes:
-            colunas.append('criado_por')
-            valores.append(usuario)
-        
-        if 'criado_em' in colunas_existentes:
-            colunas.append('criado_em')
-            valores.append(agora)
-        
-        # Construir a query SQL
-        placeholders = ','.join(['%s'] * len(colunas))
-        colunas_str = ','.join(colunas)
-        
-        query = f"""
-            INSERT INTO agenda ({colunas_str})
-            VALUES ({placeholders})
-            RETURNING id
-        """
-        
-        cur.execute(query, valores)
         producao_id = cur.fetchone()[0]
         conn.commit()
-        
         return producao_id
         
     except Exception as e:
         conn.rollback()
         st.error(f"Erro ao inserir produção: {e}")
-        raise e
+        return None
     finally:
         cur.close()
         conn.close()
 
 
 # =================================================================
-# INSERIR SETUP - VERSÃO CORRIGIDA
+# INSERIR SETUP - CORRIGIDO
 # =================================================================
 
 def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
@@ -275,7 +293,7 @@ def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
     cur = conn.cursor()
     
     try:
-        # Verificar colunas existentes
+        # Verificar quais colunas existem
         cur.execute("""
             SELECT column_name 
             FROM information_schema.columns 
@@ -283,33 +301,50 @@ def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
         """)
         colunas_existentes = [row[0] for row in cur.fetchall()]
         
-        # Construir query dinamicamente
-        colunas = ['maquina', 'pedido', 'item', 'inicio', 'fim', 'status', 'qtd', 'vinculo_id']
-        valores = [maquina, pedido, "Ajuste", inicio, fim, "Setup", 0, vinculo]
+        if 'criado_por' in colunas_existentes and 'criado_em' in colunas_existentes:
+            cur.execute(
+                """
+                INSERT INTO agenda
+                (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    maquina,
+                    pedido,
+                    "Ajuste",
+                    inicio,
+                    fim,
+                    "Setup",
+                    0,
+                    vinculo,
+                    usuario,
+                    agora
+                )
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO agenda
+                (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    maquina,
+                    pedido,
+                    "Ajuste",
+                    inicio,
+                    fim,
+                    "Setup",
+                    0,
+                    vinculo
+                )
+            )
         
-        if 'criado_por' in colunas_existentes:
-            colunas.append('criado_por')
-            valores.append(usuario)
-        
-        if 'criado_em' in colunas_existentes:
-            colunas.append('criado_em')
-            valores.append(agora)
-        
-        placeholders = ','.join(['%s'] * len(colunas))
-        colunas_str = ','.join(colunas)
-        
-        query = f"""
-            INSERT INTO agenda ({colunas_str})
-            VALUES ({placeholders})
-        """
-        
-        cur.execute(query, valores)
         conn.commit()
         
     except Exception as e:
         conn.rollback()
         st.error(f"Erro ao inserir setup: {e}")
-        raise e
     finally:
         cur.close()
         conn.close()
@@ -348,15 +383,15 @@ def deletar_op(id_op):
 
 
 # =================================================================
-# REPROGRAMAR OP
+# REPROGRAMAR OP - CORRIGIDO
 # =================================================================
 
-def reprogramar_op(id_op,novo_inicio,novo_fim,usuario):
+def reprogramar_op(id_op, novo_inicio, novo_fim, usuario):
     conn = conectar()
     cur = conn.cursor()
     
     try:
-        # Verificar colunas existentes
+        # Verificar quais colunas existem
         cur.execute("""
             SELECT column_name 
             FROM information_schema.columns 
@@ -364,28 +399,44 @@ def reprogramar_op(id_op,novo_inicio,novo_fim,usuario):
         """)
         colunas_existentes = [row[0] for row in cur.fetchall()]
         
-        # Construir query base
-        query = "UPDATE agenda SET inicio=%s, fim=%s"
-        params = [novo_inicio, novo_fim]
+        if 'alterado_por' in colunas_existentes and 'alterado_em' in colunas_existentes:
+            cur.execute(
+                """
+                UPDATE agenda
+                SET inicio=%s,
+                    fim=%s,
+                    alterado_por=%s,
+                    alterado_em=%s
+                WHERE id=%s
+                """,
+                (
+                    novo_inicio,
+                    novo_fim,
+                    usuario,
+                    agora,
+                    id_op
+                )
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE agenda
+                SET inicio=%s,
+                    fim=%s
+                WHERE id=%s
+                """,
+                (
+                    novo_inicio,
+                    novo_fim,
+                    id_op
+                )
+            )
         
-        if 'alterado_por' in colunas_existentes:
-            query += ", alterado_por=%s"
-            params.append(usuario)
-        
-        if 'alterado_em' in colunas_existentes:
-            query += ", alterado_em=%s"
-            params.append(agora)
-        
-        query += " WHERE id=%s"
-        params.append(id_op)
-        
-        cur.execute(query, params)
         conn.commit()
         
     except Exception as e:
         conn.rollback()
         st.error(f"Erro ao reprogramar: {e}")
-        raise e
     finally:
         cur.close()
         conn.close()
@@ -420,19 +471,6 @@ if 'df_produtos' not in st.session_state:
         st.session_state.df_produtos = carregar_produtos_google()
 
 df_produtos = st.session_state.df_produtos
-
-
-# =================================================================
-# MOSTRAR ESTRUTURA DA TABELA (APENAS PARA DEBUG)
-# =================================================================
-
-with st.sidebar:
-    st.title("🔧 Diagnóstico")
-    if st.button("Verificar estrutura da tabela"):
-        colunas = verificar_estrutura_tabela()
-        if colunas:
-            st.success(f"Colunas encontradas: {len(colunas)}")
-            st.write(colunas)
 
 
 # =================================================================
@@ -519,6 +557,13 @@ def renderizar_setor(lista_maquinas, altura=500):
     df_g["fim_formatado"] = df_g["fim"].dt.strftime('%d/%m %H:%M')
     df_g["ini_formatado"] = df_g["inicio"].dt.strftime('%d/%m %H:%M')
     
+    # OPs em execução
+    ops_em_execucao = df_g[
+        (df_g["inicio"] <= agora) &
+        (df_g["fim"] >= agora) &
+        (df_g["status"] == "Pendente")
+    ]
+    
     # Criar Gantt
     fig = px.timeline(
         df_g,
@@ -590,13 +635,6 @@ def renderizar_setor(lista_maquinas, altura=500):
         (df_g["status"] == "Pendente")
     ]
     
-    # OPs em execução
-    ops_em_execucao = df_g[
-        (df_g["inicio"] <= agora) &
-        (df_g["fim"] >= agora) &
-        (df_g["status"] == "Pendente")
-    ]
-    
     if not ops_atrasadas.empty:
         st.markdown("#### 🚨 OPs ATRASADAS")
         for i in range(0, len(ops_atrasadas), 3):
@@ -665,7 +703,7 @@ def renderizar_setor(lista_maquinas, altura=500):
     c1, c2, c3, c4 = st.columns(4)
     
     atrasadas_count = len(ops_atrasadas)
-    em_uso_count = len(ops_em_execucao["maquina"].unique()) if not ops_em_execucao.empty else 0
+    em_uso_count = ops_em_execucao["maquina"].nunique() if not ops_em_execucao.empty else 0
     total_setor = len(lista_maquinas)
     total_ops = df_g[df_g["status"] == "Pendente"].shape[0]
     
@@ -728,15 +766,13 @@ with tab3:
         with c1:
             maq_sel = st.selectbox(
                 "🏭 Máquina destino",
-                TODAS_MAQUINAS,
-                key="nova_maquina"
+                TODAS_MAQUINAS
             )
             
             opcoes_itens = df_prod['id_item'].tolist()
             item_sel = st.selectbox(
                 "📌 Selecione o ID_ITEM",
-                opcoes_itens,
-                key="novo_item"
+                opcoes_itens
             )
             
             descricao_texto = "N/A"
@@ -754,24 +790,21 @@ with tab3:
             st.text_input(
                 "📝 Descrição",
                 value=descricao_texto,
-                disabled=True,
-                key="nova_descricao"
+                disabled=True
             )
         
         with c2:
-            op_num = st.text_input("🔢 Número da OP", key="nova_op")
+            op_num = st.text_input("🔢 Número da OP")
             
             st.text_input(
                 "👥 Cliente",
                 value=cliente_texto,
-                disabled=True,
-                key="nova_cliente"
+                disabled=True
             )
             
             qtd_lanc = st.number_input(
                 "📊 Quantidade Total",
-                value=carga_sugerida,
-                key="nova_qtd"
+                value=carga_sugerida
             )
         
         sugestao_h = proximo_horario(maq_sel)
@@ -780,40 +813,34 @@ with tab3:
         
         data_ini = d1.date_input(
             "📅 Data",
-            sugestao_h.date(),
-            key="nova_data"
+            sugestao_h.date()
         )
         
         hora_ini = d2.time_input(
             "⏰ Hora",
-            sugestao_h.time(),
-            key="nova_hora"
+            sugestao_h.time()
         )
         
-        if st.button("🚀 CONFIRMAR E AGENDAR", key="btn_confirmar"):
+        if st.button("🚀 CONFIRMAR E AGENDAR"):
             if op_num and item_sel:
                 inicio_dt = datetime.combine(data_ini, hora_ini)
                 fim_dt = inicio_dt + timedelta(
                     hours=qtd_lanc / CADENCIA_PADRAO
                 )
                 
-                try:
-                    inserir_producao(
-                        maq_sel,
-                        f"{cliente_texto} | OP:{op_num}",
-                        item_sel,
-                        inicio_dt,
-                        fim_dt,
-                        qtd_lanc,
-                        st.session_state.user_email
-                    )
-                    
-                    st.success("✅ OP lançada com sucesso!")
-                    st.balloons()
+                resultado = inserir_producao(
+                    maq_sel,
+                    f"{cliente_texto} | OP:{op_num}",
+                    item_sel,
+                    inicio_dt,
+                    fim_dt,
+                    qtd_lanc,
+                    st.session_state.user_email
+                )
+                
+                if resultado:
+                    st.success("OP lançada com sucesso!")
                     st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"Erro ao lançar OP: {e}")
             else:
                 st.error("Preencha OP e Item")
 
@@ -830,39 +857,33 @@ with tab4:
     if not df_ger.empty:
         df_programadas = df_ger[
             df_ger["status"].isin(["Pendente","Setup","Manutenção"])
-        ].sort_values("inicio")
+        ]
         
-        if not df_programadas.empty:
-            for _, prod in df_programadas.iterrows():
-                with st.expander(
-                    f"{prod['maquina']} | {prod['pedido']} | Início: {prod['inicio'].strftime('%d/%m %H:%M')}"
-                ):
-                    st.write("**Item:**", prod["item"])
-                    st.write("**Quantidade:**", int(prod["qtd"]) if pd.notna(prod["qtd"]) else 0)
-                    st.write("**Início:**", prod["inicio"].strftime('%d/%m/%Y %H:%M'))
-                    st.write("**Fim:**", prod["fim"].strftime('%d/%m/%Y %H:%M'))
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        if st.button(
-                            "✅ Finalizar",
-                            key=f"ok_{prod['id']}"
-                        ):
-                            finalizar_op(prod["id"])
-                            st.success("OP finalizada!")
-                            st.rerun()
-                    
-                    with col2:
-                        if st.button(
-                            "🗑️ Deletar",
-                            key=f"del_{prod['id']}"
-                        ):
-                            deletar_op(prod["id"])
-                            st.success("OP deletada!")
-                            st.rerun()
-        else:
-            st.info("Nenhuma OP pendente encontrada")
+        for _, prod in df_programadas.iterrows():
+            with st.expander(
+                f"{prod['maquina']} | {prod['pedido']}"
+            ):
+                st.write("Item:", prod["item"])
+                st.write("Início:", prod["inicio"])
+                st.write("Fim:", prod["fim"])
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button(
+                        "✅ Finalizar",
+                        key=f"ok_{prod['id']}"
+                    ):
+                        finalizar_op(prod["id"])
+                        st.rerun()
+                
+                with col2:
+                    if st.button(
+                        "🗑️ Deletar",
+                        key=f"del_{prod['id']}"
+                    ):
+                        deletar_op(prod["id"])
+                        st.rerun()
     else:
         st.info("Nenhuma OP cadastrada")
 
@@ -873,14 +894,10 @@ with tab4:
 
 with tab5:
     st.subheader("📋 Produtos")
-    if not df_produtos.empty:
-        st.dataframe(
-            df_produtos,
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.warning("Nenhum produto carregado do Google Sheets")
+    st.dataframe(
+        df_produtos,
+        use_container_width=True
+    )
 
 
 # =================================================================
@@ -888,8 +905,6 @@ with tab5:
 # =================================================================
 
 with tab6:
-    st.subheader("📊 Cargas Sopro")
-    
     df_c = carregar_dados()
     
     if not df_c.empty:
@@ -898,30 +913,20 @@ with tab6:
             (df_c["qtd"] > 0)
         ]
         
-        df_sopro = df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]
+        total_cargas = (
+            df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]["qtd"].sum()
+            / CARGA_UNIDADE
+        )
         
-        if not df_sopro.empty:
-            total_cargas = df_sopro["qtd"].sum() / CARGA_UNIDADE
-            
-            st.metric(
-                "Total Geral de Cargas Sopro",
-                f"{total_cargas:.1f}"
-            )
-            
-            st.dataframe(
-                df_sopro[["maquina", "pedido", "qtd"]].sort_values("maquina"),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "maquina": "Máquina",
-                    "pedido": "OP",
-                    "qtd": "Quantidade"
-                }
-            )
-        else:
-            st.info("Nenhuma carga de sopro pendente")
-    else:
-        st.info("Nenhuma OP cadastrada")
+        st.metric(
+            "Total Geral de Cargas Sopro",
+            f"{total_cargas:.1f}"
+        )
+        
+        st.table(
+            df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]
+            [["maquina","pedido","qtd"]]
+        )
 
 
 # =================================================================
@@ -930,5 +935,5 @@ with tab6:
 
 st.divider()
 st.caption(
-    "v7.2 | Industrial By William | PCP Serigrafia + Sopro | Supabase Edition"
+    "v7.1 | Industrial By William | PCP Serigrafia + Sopro | Supabase Edition"
 )

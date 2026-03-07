@@ -4,7 +4,6 @@ import psycopg2
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import sqlite3
 from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
@@ -19,31 +18,43 @@ st.set_page_config(
     layout="wide"
 )
 
-st.success("Conectado ao Supabase")
-
 
 # =================================================================
-# DEFINIÇÃO DO BANCO
-# =================================================================
-
-if os.path.exists("/mount/data"):
-    DB_PATH = "/mount/data/pcp.db"
-else:
-    DB_PATH = "pcp.db"
-
-# 🔎 DIAGNÓSTICO TEMPORÁRIO
-st.sidebar.write("Banco em uso:", DB_PATH)
-
-
-# =================================================================
-# FUNÇÃO DE CONEXÃO
+# CONFIGURAÇÃO DO BANCO SUPABASE
 # =================================================================
 
 DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaggryosg:pcp2026supabase@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
 
+
+# =================================================================
+# FUNÇÃO DE CONEXÃO COM SUPABASE
+# =================================================================
+
 def conectar():
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+    try:
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            connect_timeout=10,
+            sslmode="require"
+        )
+        return conn
+
+    except Exception as e:
+        st.error(f"Erro ao conectar no Supabase: {e}")
+        st.stop()
+
+
+# =================================================================
+# TESTE DE CONEXÃO
+# =================================================================
+
+try:
+    conn = conectar()
+    st.success("Conectado ao Supabase")
+
+except Exception as e:
+    st.error(f"Falha na conexão: {e}")
+    st.stop()
 
 # =================================================================
 # CRIAÇÃO DA TABELA

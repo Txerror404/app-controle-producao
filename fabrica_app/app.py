@@ -46,8 +46,10 @@ background-color:#FF4B4B!important;
 """, unsafe_allow_html=True)
 
 # =================================================================
-# 2. BANCO DE DADOS PERSISTENTE
+# 2. BANCO DE DADOS E CARREGAMENTO
 # =================================================================
+
+import os
 
 if os.path.exists("/mount/data"):
     DB_PATH = "/mount/data/pcp.db"
@@ -60,15 +62,10 @@ def conectar():
 with conectar() as conn:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS agenda (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            maquina TEXT,
-            pedido TEXT,
-            item TEXT,
-            inicio TEXT,
-            fim TEXT,
-            status TEXT,
-            qtd REAL,
-            vinculo_id INTEGER
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            maquina TEXT, pedido TEXT, item TEXT, 
+            inicio TEXT, fim TEXT, status TEXT, 
+            qtd REAL, vinculo_id INTEGER
         )
     """)
 

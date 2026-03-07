@@ -20,10 +20,13 @@ st.set_page_config(
 
 
 # =================================================================
-# DEFINIÇÃO DO BANCO PERSISTENTE
+# DEFINIÇÃO DO BANCO
 # =================================================================
 
-DB_PATH = "/mount/data/pcp.db"
+if os.path.exists("/mount/data"):
+    DB_PATH = "/mount/data/pcp.db"
+else:
+    DB_PATH = "pcp.db"
 
 
 # =================================================================
@@ -35,25 +38,27 @@ def conectar():
 
 
 # =================================================================
-# CRIAÇÃO DA TABELA (SE NÃO EXISTIR)
+# CRIAÇÃO DA TABELA
 # =================================================================
 
-with conectar() as conn:
+conn = conectar()
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS agenda (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            maquina TEXT,
-            pedido TEXT,
-            item TEXT,
-            inicio TEXT,
-            fim TEXT,
-            status TEXT,
-            qtd REAL,
-            vinculo_id INTEGER
-        )
-    """)
+conn.execute("""
+    CREATE TABLE IF NOT EXISTS agenda (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        maquina TEXT,
+        pedido TEXT,
+        item TEXT,
+        inicio TEXT,
+        fim TEXT,
+        status TEXT,
+        qtd REAL,
+        vinculo_id INTEGER
+    )
+""")
 
+conn.commit()
+conn.close()
 
 # =================================================================
 # BACKUP AUTOMÁTICO DO BANCO

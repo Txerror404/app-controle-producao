@@ -1,5 +1,4 @@
 import os
-import shutil
 import psycopg2
 import streamlit as st
 import pandas as pd
@@ -31,12 +30,12 @@ DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaggryosg:pcp2026supabase@aws-0
 # =================================================================
 
 def conectar():
-    conn = psycopg2.connect(
-        DATABASE_URL,
-        connect_timeout=10
-    )
-    return conn
-
+    try:
+        conn = psycopg2.connect(
+            DATABASE_URL,
+            connect_timeout=10
+        )
+        return conn
     except Exception as e:
         st.error(f"Erro ao conectar no Supabase: {e}")
         st.stop()
@@ -49,57 +48,42 @@ def conectar():
 try:
     conn = conectar()
     st.success("Conectado ao Supabase")
+    conn.close()
 
 except Exception as e:
     st.error(f"Falha na conexão: {e}")
     st.stop()
 
-# =================================================================
-# CRIAÇÃO DA TABELA
-# =================================================================
-
-conn = conectar()
-
-conn.execute("""
-    CREATE TABLE IF NOT EXISTS agenda (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        maquina TEXT,
-        pedido TEXT,
-        item TEXT,
-        inicio TEXT,
-        fim TEXT,
-        status TEXT,
-        qtd REAL,
-        vinculo_id INTEGER
-    )
-""")
-
-conn.commit()
-conn.close()
 
 # =================================================================
-# BACKUP AUTOMÁTICO DO BANCO
+# CRIAÇÃO DA TABELA (POSTGRESQL)
 # =================================================================
 
-def backup_banco():
+try:
+    conn = conectar()
+    cur = conn.cursor()
 
-    try:
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS agenda (
+            id SERIAL PRIMARY KEY,
+            maquina TEXT,
+            pedido TEXT,
+            item TEXT,
+            inicio TIMESTAMP,
+            fim TIMESTAMP,
+            status TEXT,
+            qtd NUMERIC,
+            vinculo_id INTEGER
+        )
+    """)
 
-        if os.path.exists(DB_PATH):
+    conn.commit()
+    cur.close()
+    conn.close()
 
-            nome = datetime.now().strftime("backup_%Y%m%d.db")
-
-            destino = os.path.join("/mount/data", nome)
-
-            if not os.path.exists(destino):
-
-                shutil.copy(DB_PATH, destino)
-
-    except:
-        pass
-
-
-backup_banco()
+except Exception as e:
+    st.error(f"Erro ao criar tabela: {e}")
+    st.stop()
 
 
 # =================================================================

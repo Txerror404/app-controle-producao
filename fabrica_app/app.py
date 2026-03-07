@@ -456,6 +456,19 @@ with aba1:
             qtd_lanc = st.number_input("📊 Quantidade Total", value=carga_sugerida, key="qtd_lanc")
 
         st.divider()
+    def verificar_conflito(df, maquina, inicio_novo, fim_novo):
+
+    df_maquina = df[df["maquina"] == maquina]
+
+    if df_maquina.empty:
+        return False
+
+    conflito = df_maquina[
+        (inicio_novo < df_maquina["fim"]) &
+        (fim_novo > df_maquina["inicio"])
+    ]
+
+    return not conflito.empty
         
         c3, c4, c5, c6 = st.columns(4)
         

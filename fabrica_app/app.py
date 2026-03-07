@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
+import time
+time.sleep(5)
+
 
 # =================================================================
 # CONFIGURAÇÃO DA PÁGINA (PRECISA SER O PRIMEIRO COMANDO STREAMLIT)

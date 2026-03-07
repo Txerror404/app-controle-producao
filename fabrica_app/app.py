@@ -28,6 +28,9 @@ if os.path.exists("/mount/data"):
 else:
     DB_PATH = "pcp.db"
 
+# 🔎 DIAGNÓSTICO TEMPORÁRIO
+st.sidebar.write("Banco em uso:", DB_PATH)
+
 
 # =================================================================
 # FUNÇÃO DE CONEXÃO

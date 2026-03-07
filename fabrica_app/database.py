@@ -6,7 +6,11 @@ import psycopg2
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-from config import DATABASE_URL, SETUP_DURACAO, CADENCIA_PADRAO, fuso_br
+import pytz
+from config import DATABASE_URL, SETUP_DURACAO, CADENCIA_PADRAO
+
+# Fuso Brasil para usar nas funções
+fuso_br = pytz.timezone("America/Sao_Paulo")
 
 def conectar():
     try:
@@ -354,3 +358,4 @@ def reprogramar_op(id_op, novo_inicio, usuario):
     finally:
         cur.close()
         conn.close()
+        

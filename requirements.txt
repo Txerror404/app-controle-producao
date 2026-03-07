@@ -5,3 +5,4 @@ pytz
 streamlit-autorefresh
 gspread
 st-gsheets-connection
+psycopg2-binary

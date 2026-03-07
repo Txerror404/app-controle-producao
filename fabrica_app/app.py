@@ -383,3 +383,249 @@ def reprogramar_op(id_op,novo_inicio,novo_fim,usuario):
     conn.commit()
     cur.close()
     conn.close()
+    # =================================================================
+# LOGIN
+# =================================================================
+
+if "auth_ok" not in st.session_state:
+    st.session_state.auth_ok = False
+
+if not st.session_state.auth_ok:
+
+    st.markdown("<h1 style='text-align:center;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
+
+    col1,col2,col3 = st.columns([1,1.5,1])
+
+    with col2:
+
+        email = st.text_input("E-mail autorizado:").lower().strip()
+
+        if st.button("Acessar Sistema",use_container_width=True):
+
+            if email in [ADMIN_EMAIL] + OPERACIONAL_EMAIL:
+
+                st.session_state.auth_ok = True
+                st.session_state.user_email = email
+                st.rerun()
+
+    st.stop()
+
+
+# =================================================================
+# CARREGAR PRODUTOS
+# =================================================================
+
+if 'df_produtos' not in st.session_state:
+
+    with st.spinner("Sincronizando produtos..."):
+
+        st.session_state.df_produtos = carregar_produtos_google()
+
+df_produtos = st.session_state.df_produtos
+
+
+# =================================================================
+# CABEÇALHO
+# =================================================================
+
+st.markdown(f"""
+<div style="background:#1E1E1E;padding:8px 15px;border-radius:8px;border-left:8px solid #FF4B4B;margin-bottom:15px;display:flex;justify-content:space-between;align-items:center;">
+<div>
+
+<h2 style="color:white;margin:0;font-size:20px;">📊 PCP | CRONOGRAMA</h2>
+<p style="color:#888;margin:2px 0 0 0;font-size:12px;">👤 {st.session_state.user_email}</p>
+
+</div>
+
+<div style="text-align:center;border:1px solid #FF4B4B;padding:2px 15px;border-radius:5px;background:#0E1117;">
+<h3 style="color:#FF4B4B;margin:0;font-family:'Courier New';font-size:22px;">
+⏰ {agora.strftime('%H:%M:%S')}
+</h3>
+<p style="color:#aaa;margin:-2px 0 2px 0;font-size:12px;border-top:1px dashed #FF4B4B;padding-top:2px;">
+{agora.strftime('%d/%m/%Y')}
+</p>
+</div>
+</div>
+""",unsafe_allow_html=True)
+
+
+# =================================================================
+# ABAS
+# =================================================================
+
+aba1, aba2, aba3, aba4 = st.tabs(["➕ Lançar OP","🎨 Serigrafia","🍼 Sopro","⚙️ Gerenciar"])
+
+
+# =================================================================
+# LANÇAMENTO
+# =================================================================
+
+with aba1:
+
+    st.subheader("➕ Nova Ordem de Produção")
+
+    c1,c2 = st.columns(2)
+
+    with c1:
+
+        maq_sel = st.selectbox("Máquina",TODAS_MAQUINAS)
+
+        item_sel = st.selectbox(
+            "Item",
+            df_produtos["id_item"].tolist()
+        )
+
+        descricao = get_descricao_produto(item_sel)
+
+        st.text_input("Descrição",value=descricao,disabled=True)
+
+    with c2:
+
+        op_num = st.text_input("Número OP")
+
+        qtd_lanc = st.number_input("Quantidade",value=CARGA_UNIDADE)
+
+    st.divider()
+
+    sugestao = proximo_horario(maq_sel)
+
+    c3,c4 = st.columns(2)
+
+    data_ini = c3.date_input("Data início",sugestao.date())
+    hora_ini = c4.time_input("Hora início",sugestao.time())
+
+    minutos_setup = st.number_input("Tempo setup (min)",value=30)
+
+    if st.button("🚀 AGENDAR",use_container_width=True):
+
+        inicio_dt = datetime.combine(data_ini,hora_ini)
+
+        fim_dt = inicio_dt + timedelta(hours=qtd_lanc/CADENCIA_PADRAO)
+
+        producao_id = inserir_producao(
+            maq_sel,
+            f"OP:{op_num}",
+            item_sel,
+            inicio_dt,
+            fim_dt,
+            qtd_lanc,
+            st.session_state.user_email
+        )
+
+        fim_setup = fim_dt + timedelta(minutes=minutos_setup)
+
+        inserir_setup(
+            maq_sel,
+            f"SETUP {op_num}",
+            fim_dt,
+            fim_setup,
+            producao_id,
+            st.session_state.user_email
+        )
+
+        st.success("OP criada com sucesso")
+        st.rerun()
+
+
+# =================================================================
+# FUNÇÃO GANTT
+# =================================================================
+
+def renderizar_setor(maquinas):
+
+    df = carregar_dados()
+
+    df = df[df["maquina"].isin(maquinas)]
+
+    if df.empty:
+
+        st.info("Sem programação")
+        return
+
+    fig = px.timeline(
+        df,
+        x_start="inicio",
+        x_end="fim",
+        y="maquina",
+        color="status",
+        text="rotulo_barra"
+    )
+
+    fig.update_yaxes(autorange="reversed")
+
+    fig.add_vline(
+        x=agora,
+        line_dash="dash",
+        line_color="red"
+    )
+
+    st.plotly_chart(fig,use_container_width=True)
+
+
+# =================================================================
+# SERIGRAFIA
+# =================================================================
+
+with aba2:
+
+    renderizar_setor(MAQUINAS_SERIGRAFIA)
+
+
+# =================================================================
+# SOPRO
+# =================================================================
+
+with aba3:
+
+    renderizar_setor(MAQUINAS_SOPRO)
+
+
+# =================================================================
+# GERENCIAR
+# =================================================================
+
+with aba4:
+
+    df = carregar_dados()
+
+    df = df[df["status"].isin(["Pendente","Setup","Manutenção"])]
+
+    if df.empty:
+
+        st.info("Nenhuma OP programada")
+        st.stop()
+
+    for _,prod in df.sort_values("inicio").iterrows():
+
+        with st.expander(f"{prod['maquina']} | {prod['pedido']}"):
+
+            st.write("Item:",prod["item"])
+            st.write("Início:",prod["inicio"])
+            st.write("Fim:",prod["fim"])
+
+            col1,col2,col3 = st.columns(3)
+
+            if col1.button("Finalizar",key=f"f{prod['id']}"):
+
+                finalizar_op(prod["id"])
+                st.rerun()
+
+            if col2.button("Deletar",key=f"d{prod['id']}"):
+
+                deletar_op(prod["id"])
+                st.rerun()
+
+            if col3.button("Reprogramar",key=f"r{prod['id']}"):
+
+                novo_inicio = prod["inicio"] + timedelta(hours=1)
+
+                novo_fim = prod["fim"] + timedelta(hours=1)
+
+                reprogramar_op(
+                    prod["id"],
+                    novo_inicio,
+                    novo_fim,
+                    st.session_state.user_email
+                )
+
+                st.rerun()

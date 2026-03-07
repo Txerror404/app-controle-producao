@@ -1,3 +1,4 @@
+import os
 import shutil
 import streamlit as st
 import pandas as pd
@@ -7,7 +8,9 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-#Backup
+# =================================================================
+# BACKUP DO BANCO
+# =================================================================
 
 def backup_banco():
 

@@ -121,29 +121,41 @@ GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0
 
 
 # =================================================================
-# ESTILO DA INTERFACE - TEMA CLARO PROFISSIONAL
+# ESTILO DA INTERFACE - TEMA MEIO TERMO (DARK SEMI-CLARO)
 # =================================================================
-# 👇 VISUAL: Todas as cores ajustadas para tema claro
+# 👇 VISUAL: Cores ajustadas para meio termo - não tão escuro, não tão claro
 st.markdown("""
 <style>
-    /* Container principal */
+    /* Container principal - fundo meio termo */
     .block-container {
         padding-top: 0.5rem !important;
         padding-bottom: 1rem !important;
         max-width: 100% !important;
-        background-color: #F5F7FA;
+        background-color: #1A1E24;
     }
     
-    /* Esconder toolbar do Plotly */
+    /* Toolbar do Plotly - visível com zoom */
     .modebar-container {
-        top: 0 !important;
-        opacity: 0.3 !important;
+        top: 5px !important;
+        right: 10px !important;
+        opacity: 0.8 !important;
+        background-color: #252A33 !important;
+        border-radius: 8px !important;
+        padding: 5px !important;
+        border: 1px solid #3A404C !important;
     }
     .modebar-container:hover {
         opacity: 1 !important;
     }
     
-    /* Estilo das abas como botões - TEMA CLARO */
+    .modebar-btn {
+        color: #E0E0E0 !important;
+    }
+    .modebar-btn:hover {
+        color: #E63946 !important;
+    }
+    
+    /* Estilo das abas - meio termo */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
@@ -151,18 +163,18 @@ st.markdown("""
     }
     
     .stTabs [data-baseweb="tab"] {
-        background-color: #F0F0F0;
+        background-color: #252A33;
         border-radius: 6px;
         padding: 8px 20px;
-        color: #2C3E50;
+        color: #E0E0E0;
         font-weight: 500;
-        border: 1px solid #E0E0E0;
+        border: 1px solid #3A404C;
         transition: all 0.2s;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: #E0E0E0;
-        color: #E63946;
+        background-color: #2F3540;
+        color: #FFFFFF;
         border-color: #E63946;
     }
     
@@ -172,29 +184,29 @@ st.markdown("""
         border-color: #E63946 !important;
     }
     
-    /* Cards de métricas - TEMA CLARO */
+    /* Cards de métricas - meio termo */
     div[data-testid="metric-container"] {
-        background-color: #FFFFFF;
-        border: 1px solid #E0E0E0;
+        background-color: #252A33;
+        border: 1px solid #3A404C;
         padding: 15px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     
     div[data-testid="metric-container"] label {
-        color: #7F8C8D !important;
+        color: #A0A8B8 !important;
         font-size: 14px !important;
     }
     
     div[data-testid="metric-container"] div {
-        color: #2C3E50 !important;
+        color: #FFFFFF !important;
         font-size: 24px !important;
         font-weight: 600 !important;
     }
     
-    /* Headers - TEMA CLARO */
+    /* Headers - meio termo */
     h1, h2, h3, h4, h5, h6 {
-        color: #2C3E50 !important;
+        color: #FFFFFF !important;
         margin-top: 0.5rem !important;
         margin-bottom: 0.5rem !important;
     }
@@ -203,44 +215,44 @@ st.markdown("""
     hr {
         margin-top: 1rem !important;
         margin-bottom: 1rem !important;
-        border-color: #E0E0E0 !important;
+        border-color: #3A404C !important;
     }
     
-    /* Expanders - TEMA CLARO */
+    /* Expanders - meio termo */
     .streamlit-expanderHeader {
-        background-color: #FFFFFF;
+        background-color: #252A33;
         border-radius: 6px;
-        border: 1px solid #E0E0E0;
-        color: #2C3E50 !important;
+        border: 1px solid #3A404C;
+        color: #FFFFFF !important;
     }
     
     .streamlit-expanderContent {
-        background-color: #F5F7FA;
-        border: 1px solid #E0E0E0;
+        background-color: #1A1E24;
+        border: 1px solid #3A404C;
         border-top: none;
         border-radius: 0 0 6px 6px;
     }
     
-    /* Inputs e selects - TEMA CLARO */
+    /* Inputs e selects - meio termo */
     div[data-baseweb="select"] > div {
-        background-color: #FFFFFF !important;
-        border-color: #E0E0E0 !important;
+        background-color: #252A33 !important;
+        border-color: #3A404C !important;
     }
     
     input, textarea, [data-baseweb="input"] input {
-        background-color: #FFFFFF !important;
-        border-color: #E0E0E0 !important;
-        color: #2C3E50 !important;
+        background-color: #252A33 !important;
+        border-color: #3A404C !important;
+        color: #FFFFFF !important;
     }
     
     label {
-        color: #7F8C8D !important;
+        color: #A0A8B8 !important;
         font-weight: 500 !important;
     }
     
-    /* Botões - TEMA CLARO */
+    /* Botões - meio termo */
     .stButton button {
-        background-color: #FFFFFF;
+        background-color: #252A33;
         border: 1px solid #E63946;
         color: #E63946;
         border-radius: 6px;
@@ -255,38 +267,38 @@ st.markdown("""
         border-color: #E63946;
     }
     
-    /* Cards de status personalizados - TEMA CLARO */
+    /* Cards de status personalizados - meio termo */
     .status-card-atrasada {
-        background-color: rgba(230, 57, 70, 0.08);
+        background-color: rgba(230, 57, 70, 0.12);
         padding: 15px;
         border-radius: 10px;
         border-left: 6px solid #E63946;
         margin-bottom: 10px;
-        border: 1px solid #E0E0E0;
+        border: 1px solid #3A404C;
     }
     
     .status-card-execucao {
-        background-color: rgba(243, 156, 18, 0.08);
+        background-color: rgba(243, 156, 18, 0.12);
         padding: 15px;
         border-radius: 10px;
         border-left: 6px solid #F39C12;
         margin-bottom: 10px;
-        border: 1px solid #E0E0E0;
+        border: 1px solid #3A404C;
     }
     
     .status-card-semop {
-        background-color: rgba(149, 165, 166, 0.08);
+        background-color: rgba(149, 165, 166, 0.12);
         padding: 15px;
         border-radius: 10px;
         border-left: 6px solid #95A5A6;
         margin-bottom: 10px;
         text-align: center;
-        border: 1px solid #E0E0E0;
+        border: 1px solid #3A404C;
     }
     
-    /* Cabeçalho customizado - TEMA CLARO */
+    /* Cabeçalho customizado - meio termo */
     .custom-header {
-        background-color: #FFFFFF;
+        background-color: #252A33;
         padding: 8px 15px;
         border-radius: 8px;
         border-left: 8px solid #E63946;
@@ -294,18 +306,18 @@ st.markdown("""
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border: 1px solid #E0E0E0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border: 1px solid #3A404C;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
     
     .custom-header h2 {
-        color: #2C3E50 !important;
+        color: #FFFFFF !important;
         margin: 0;
         font-size: 20px;
     }
     
     .custom-header p {
-        color: #7F8C8D !important;
+        color: #A0A8B8 !important;
         margin: 2px 0 0 0;
         font-size: 12px;
     }
@@ -315,9 +327,9 @@ st.markdown("""
         border: 1px solid #E63946;
         padding: 2px 15px;
         border-radius: 5px;
-        background-color: #F5F7FA;
+        background-color: #1A1E24;
         min-width: 130px;
-        box-shadow: 0 2px 4px rgba(230, 57, 70, 0.1);
+        box-shadow: 0 2px 8px rgba(230, 57, 70, 0.2);
     }
     
     .clock-time {
@@ -329,71 +341,71 @@ st.markdown("""
     }
     
     .clock-date {
-        color: #7F8C8D;
+        color: #A0A8B8;
         margin: -2px 0 2px 0;
         font-size: 12px;
         border-top: 1px dashed #E63946;
         padding-top: 2px;
     }
     
-    /* Rodapé - TEMA CLARO */
+    /* Rodapé - meio termo */
     .footer {
         text-align: center;
-        color: #95A5A6;
+        color: #A0A8B8;
         font-size: 12px;
         padding: 20px 0 10px 0;
-        border-top: 1px solid #E0E0E0;
+        border-top: 1px solid #3A404C;
         margin-top: 30px;
     }
     
     /* Texto em geral */
     p, li, .stMarkdown {
-        color: #2C3E50 !important;
+        color: #E0E0E0 !important;
     }
     
     /* Info boxes */
     .stAlert {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E0E0E0 !important;
-        color: #2C3E50 !important;
+        background-color: #252A33 !important;
+        border: 1px solid #3A404C !important;
+        color: #E0E0E0 !important;
     }
     
     /* Dataframes */
     .dataframe {
-        background-color: #FFFFFF !important;
-        color: #2C3E50 !important;
+        background-color: #252A33 !important;
+        color: #E0E0E0 !important;
     }
     
     /* Popovers */
     div[data-testid="stPopover"] {
-        background-color: #FFFFFF;
-        border: 1px solid #E0E0E0;
+        background-color: #252A33;
+        border: 1px solid #3A404C;
     }
     
     /* Selectbox dropdown */
     div[data-baseweb="popover"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E0E0E0 !important;
+        background-color: #252A33 !important;
+        border: 1px solid #3A404C !important;
     }
     
     li[role="option"] {
-        color: #2C3E50 !important;
+        color: #E0E0E0 !important;
     }
     
     li[role="option"]:hover {
-        background-color: #F0F0F0 !important;
+        background-color: #2F3540 !important;
     }
     
     /* Número de inputs */
     .stNumberInput input {
-        background-color: #FFFFFF !important;
-        color: #2C3E50 !important;
+        background-color: #252A33 !important;
+        color: #FFFFFF !important;
     }
     
     /* Date input e time input */
     .stDateInput input, .stTimeInput input {
-        background-color: #FFFFFF !important;
-        color: #2C3E50 !important;
+        background-color: #252A33 !important;
+        color: #FFFFFF !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -775,7 +787,7 @@ if "auth_ok" not in st.session_state:
     st.session_state.auth_ok = False
 
 if not st.session_state.auth_ok:
-    st.markdown("<h1 style='text-align:center;color:#2C3E50;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;color:#FFFFFF;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1,1.5,1])
     with col2:
         email = st.text_input("E-mail autorizado:").lower().strip()
@@ -799,15 +811,15 @@ df_produtos = st.session_state.df_produtos
 
 
 # =================================================================
-# CABEÇALHO - TEMA CLARO
+# CABEÇALHO - TEMA MEIO TERMO
 # =================================================================
 st.markdown(f"""
 <div class="custom-header">
     <div>
-        <h2 style="margin:0;font-size:20px;color:#2C3E50;">
+        <h2 style="margin:0;font-size:20px;color:#FFFFFF;">
             📊 PCP <span style="color:#E63946;">|</span> CRONOGRAMA DE MÁQUINAS
         </h2>
-        <p style="color:#7F8C8D;margin:2px 0 0 0;font-size:12px;">
+        <p style="color:#A0A8B8;margin:2px 0 0 0;font-size:12px;">
             👤 Usuário: {st.session_state.user_email}
         </p>
     </div>
@@ -820,7 +832,7 @@ st.markdown(f"""
 
 
 # =================================================================
-# FUNÇÃO PARA RENDERIZAR SETOR - COM CORES AJUSTADAS
+# FUNÇÃO PARA RENDERIZAR SETOR - COM ZOOM RESTAURADO
 # =================================================================
 
 def renderizar_setor(lista_maquinas, altura=500):
@@ -839,7 +851,7 @@ def renderizar_setor(lista_maquinas, altura=500):
     setor_nome = "SERIGRAFIA" if "maquina" in lista_maquinas[0] else "SOPRO"
     st.markdown(f"### 🏭 Setor {setor_nome}")
     
-    # 👇 VISUAL: Gráfico com cores ajustadas para tema claro
+    # 👇 VISUAL: Gráfico com cores ajustadas para tema meio termo
     fig = px.timeline(
         df_g,
         x_start="inicio",
@@ -881,7 +893,7 @@ def renderizar_setor(lista_maquinas, altura=500):
         textposition='inside',
         insidetextanchor='start',
         width=0.95,
-        marker=dict(line=dict(width=1, color='#FFFFFF')),
+        marker=dict(line=dict(width=1, color='#1A1E24')),
         opacity=0.9,
         selector=dict(type='bar'),
         textfont=dict(color='white', size=11, family='Arial')
@@ -891,9 +903,9 @@ def renderizar_setor(lista_maquinas, altura=500):
         autorange="reversed",
         title="",
         showgrid=True,
-        gridcolor='#E0E0E0',
+        gridcolor='#3A404C',
         zeroline=False,
-        tickfont=dict(size=12, color='#2C3E50'),
+        tickfont=dict(size=12, color='#E0E0E0'),
         tickangle=0
     )
     
@@ -905,10 +917,10 @@ def renderizar_setor(lista_maquinas, altura=500):
         ],
         dtick=10800000,
         tickformat="%H:%M\n%d/%m",
-        gridcolor='#E0E0E0',
+        gridcolor='#3A404C',
         showgrid=True,
         tickangle=0,
-        tickfont=dict(size=11, color='#2C3E50'),
+        tickfont=dict(size=11, color='#E0E0E0'),
         title=""
     )
     
@@ -925,24 +937,30 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     fig.update_layout(
-        plot_bgcolor='#FFFFFF',
-        paper_bgcolor='#FFFFFF',
-        font=dict(color='#2C3E50'),
+        plot_bgcolor='#1A1E24',
+        paper_bgcolor='#1A1E24',
+        font=dict(color='#E0E0E0'),
         margin=dict(l=50, r=20, t=40, b=40),
         legend=dict(
-            bgcolor='#FFFFFF',
-            bordercolor='#E0E0E0',
-            font=dict(color='#2C3E50')
+            bgcolor='#252A33',
+            bordercolor='#3A404C',
+            font=dict(color='#E0E0E0')
         ),
         hoverlabel=dict(
-            bgcolor='#FFFFFF',
+            bgcolor='#252A33',
             font_size=13,
             font_family='Arial',
-            font_color='#2C3E50'
+            font_color='#FFFFFF'
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    # 👇 ZOOM RESTAURADO - ModeBar visível para zoom, pan, etc
+    st.plotly_chart(fig, use_container_width=True, config={
+        'displayModeBar': True,
+        'scrollZoom': True,
+        'modeBarButtonsToAdd': ['zoom', 'pan', 'select', 'zoomIn', 'zoomOut', 'autoScale', 'resetScale'],
+        'modeBarButtonsToRemove': ['lasso2d', 'select2d']
+    })
     
     # OPs atrasadas
     ops_atrasadas = df_g[df_g["atrasada"]]
@@ -959,16 +977,16 @@ def renderizar_setor(lista_maquinas, altura=500):
                     <p style="color:#E63946;font-weight:bold;margin:0 0 10px 0;font-size:16px;">
                         🏭 {op['maquina']}
                     </p>
-                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
+                    <p style="color:#E0E0E0;margin:5px 0;font-size:14px;">
                         <b>Item:</b> {op['item']}
                     </p>
-                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
+                    <p style="color:#E0E0E0;margin:5px 0;font-size:14px;">
                         <b>Descrição:</b> {descricao_produto[:50]}...
                     </p>
-                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
+                    <p style="color:#E0E0E0;margin:5px 0;font-size:14px;">
                         <b>QTD:</b> {int(op['qtd']):,}
                     </p>
-                    <p style="color:#7F8C8D;margin:10px 0 0 0;font-size:12px;">
+                    <p style="color:#A0A8B8;margin:10px 0 0 0;font-size:12px;">
                         ⏱️ Deveria terminar: {op['fim'].strftime('%d/%m %H:%M')}
                     </p>
                 </div>
@@ -990,16 +1008,16 @@ def renderizar_setor(lista_maquinas, altura=500):
                     <p style="color:#F39C12;font-weight:bold;margin:0 0 10px 0;font-size:16px;">
                         🏭 {op['maquina']}
                     </p>
-                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
+                    <p style="color:#E0E0E0;margin:5px 0;font-size:14px;">
                         <b>Item:</b> {op['item']}
                     </p>
-                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
+                    <p style="color:#E0E0E0;margin:5px 0;font-size:14px;">
                         <b>Descrição:</b> {descricao_produto[:50]}...
                     </p>
-                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
+                    <p style="color:#E0E0E0;margin:5px 0;font-size:14px;">
                         <b>QTD:</b> {int(op['qtd']):,}
                     </p>
-                    <p style="color:#7F8C8D;margin:10px 0 0 0;font-size:12px;">
+                    <p style="color:#A0A8B8;margin:10px 0 0 0;font-size:12px;">
                         ⏱️ Término previsto: {op['fim'].strftime('%d/%m %H:%M')}
                     </p>
                 </div>
@@ -1022,7 +1040,7 @@ def renderizar_setor(lista_maquinas, altura=500):
                     <p style="color:#95A5A6;font-weight:bold;margin:0;font-size:16px;">
                         🏭 {maq}
                     </p>
-                    <p style="color:#7F8C8D;margin:5px 0 0 0;font-size:14px;">
+                    <p style="color:#A0A8B8;margin:5px 0 0 0;font-size:14px;">
                         Sem OP
                     </p>
                 </div>
@@ -1336,7 +1354,7 @@ with tab6:
 
 
 # =================================================================
-# RODAPÉ - TEMA CLARO
+# RODAPÉ - TEMA MEIO TERMO
 # =================================================================
 st.markdown("""
 <div class="footer">

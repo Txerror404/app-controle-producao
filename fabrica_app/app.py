@@ -6,42 +6,66 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
+
+# =================================================================
 # CONFIGURAÇÃO DA PÁGINA
+# =================================================================
 
 st.set_page_config(
     page_title="PCP Industrial - SISTEMA COMPLETO",
     layout="wide"
 )
 
-# CONEXÃO COM BANCO SUPABASE
+
+# =================================================================
+# CONFIGURAÇÃO DO BANCO SUPABASE
+# =================================================================
 
 DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaqgryosg:pcp2026supabase@aws-0-us-west-2.pooler.supabase.com:6543/postgres?sslmode=require"
 
 
+# =================================================================
+# CONEXÃO COM SUPABASE
+# =================================================================
+
 def conectar():
+
     try:
+
         conn = psycopg2.connect(
             DATABASE_URL,
             connect_timeout=10
         )
+
         return conn
 
     except Exception as e:
+
         st.error(f"Erro ao conectar no Supabase: {e}")
         st.stop()
 
+
+# =================================================================
 # TESTE DE CONEXÃO
+# =================================================================
 
 try:
+
     conn = conectar()
     conn.close()
+
 except Exception as e:
+
     st.error(f"Falha na conexão com Supabase: {e}")
     st.stop()
 
+
+# =================================================================
 # CRIAÇÃO DA TABELA (CASO NÃO EXISTA)
+# =================================================================
 
 try:
+
     conn = conectar()
     cur = conn.cursor()
 
@@ -68,14 +92,21 @@ try:
     conn.close()
 
 except Exception as e:
+
     st.error(f"Erro ao criar tabela: {e}")
     st.stop()
 
+
+# =================================================================
 # AUTO REFRESH
+# =================================================================
 
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 
-# CONFIGURAÇÕES GERAIS
+
+# =================================================================
+# CONFIGURAÇÕES DO SISTEMA
+# =================================================================
 
 ADMIN_EMAIL = "will@admin.com.br"
 
@@ -83,6 +114,11 @@ OPERACIONAL_EMAIL = [
     "sarita@will.com.br",
     "oneida@will.com.br"
 ]
+
+
+# =================================================================
+# MÁQUINAS
+# =================================================================
 
 MAQUINAS_SERIGRAFIA = [
     "maquina 13001",
@@ -95,52 +131,58 @@ MAQUINAS_SOPRO = [f"Sopro {i:02d}" for i in range(1, 17)]
 
 TODAS_MAQUINAS = MAQUINAS_SERIGRAFIA + MAQUINAS_SOPRO
 
-CADENCIA_PADRAO = 2380
 
+# =================================================================
+# PRODUÇÃO
+# =================================================================
+
+CADENCIA_PADRAO = 2380
 CARGA_UNIDADE = 49504
 
+
+# =================================================================
 # FUSO HORÁRIO
+# =================================================================
 
 fuso_br = pytz.timezone("America/Sao_Paulo")
-
 agora = datetime.now(fuso_br).replace(tzinfo=None)
 
+
+# =================================================================
 # GOOGLE SHEETS
+# =================================================================
 
 GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
 
 
+# =================================================================
 # ESTILO DA INTERFACE
+# =================================================================
 
 st.markdown("""
+
 <style>
 
-.block-container {
-    padding-top: 0.5rem;
-}
+.block-container {padding-top:0.5rem;}
 
-.modebar-container {
-    top:0!important;
-}
+.modebar-container {top:0!important;}
 
-.stTabs [data-baseweb="tab-list"]{
-    gap:10px;
-}
+.stTabs [data-baseweb="tab-list"] {gap:10px;}
 
 .stTabs [data-baseweb="tab"]{
-    background-color:#1e1e1e;
-    border-radius:5px;
-    padding:5px 20px;
-    color:white;
+background-color:#1e1e1e;
+border-radius:5px;
+padding:5px 20px;
+color:white;
 }
 
 .stTabs [aria-selected="true"]{
-    background-color:#FF4B4B!important;
+background-color:#FF4B4B!important;
 }
 
 </style>
-""", unsafe_allow_html=True)
 
+""", unsafe_allow_html=True)
 # =================================================================
 # BUSCAR DESCRIÇÃO DO PRODUTO
 # =================================================================
@@ -186,11 +228,12 @@ def carregar_produtos_google():
         return df.fillna('N/A')
 
     except Exception:
+
         return pd.DataFrame(columns=['id_item','descricao','cliente','qtd_carga'])
 
 
 # =================================================================
-# CARREGAR DADOS DO BANCO (SUPABASE)
+# CARREGAR DADOS DO BANCO
 # =================================================================
 
 def carregar_dados():
@@ -211,7 +254,7 @@ def carregar_dados():
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
 
         df["rotulo_barra"] = df.apply(
-            lambda r: "🔧 SETUP" if r['status']=="Setup"
+            lambda r: "🔧 SETUP" if r['status'] == "Setup"
             else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}",
             axis=1
         )
@@ -220,7 +263,7 @@ def carregar_dados():
 
 
 # =================================================================
-# PRÓXIMO HORÁRIO LIVRE DA MÁQUINA
+# PRÓXIMO HORÁRIO DISPONÍVEL
 # =================================================================
 
 def proximo_horario(maq):
@@ -384,7 +427,66 @@ def reprogramar_op(id_op,novo_inicio,novo_fim,usuario):
     cur.close()
     conn.close()
     # =================================================================
-# LOGIN
+# CONFIGURAÇÕES GERAIS
+# =================================================================
+
+ADMIN_EMAIL = "will@admin.com.br"
+OPERACIONAL_EMAIL = ["sarita@will.com.br", "oneida@will.com.br"]
+
+MAQUINAS_SERIGRAFIA = [
+    "maquina 13001",
+    "maquina 13002",
+    "maquina 13003",
+    "maquina 13004"
+]
+
+MAQUINAS_SOPRO = [f"Sopro {i:02d}" for i in range(1, 17)]
+
+TODAS_MAQUINAS = MAQUINAS_SERIGRAFIA + MAQUINAS_SOPRO
+
+CADENCIA_PADRAO = 2380
+CARGA_UNIDADE = 49504
+
+fuso_br = pytz.timezone("America/Sao_Paulo")
+agora = datetime.now(fuso_br).replace(tzinfo=None)
+
+GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
+
+
+# =================================================================
+# ESTILO DA INTERFACE
+# =================================================================
+
+st.markdown("""
+<style>
+
+.block-container {
+padding-top: 0.5rem;
+}
+
+.modebar-container {
+top: 0 !important;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+gap: 10px;
+}
+
+.stTabs [data-baseweb="tab"] {
+background-color: #1e1e1e;
+border-radius: 5px;
+padding: 5px 20px;
+color: white;
+}
+
+.stTabs [aria-selected="true"] {
+background-color: #FF4B4B !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+# =================================================================
+# LOGIN DO SISTEMA
 # =================================================================
 
 if "auth_ok" not in st.session_state:
@@ -394,13 +496,13 @@ if not st.session_state.auth_ok:
 
     st.markdown("<h1 style='text-align:center;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
 
-    col1,col2,col3 = st.columns([1,1.5,1])
+    col1, col2, col3 = st.columns([1,1.5,1])
 
     with col2:
 
         email = st.text_input("E-mail autorizado:").lower().strip()
 
-        if st.button("Acessar Sistema",use_container_width=True):
+        if st.button("Acessar Sistema", use_container_width=True):
 
             if email in [ADMIN_EMAIL] + OPERACIONAL_EMAIL:
 
@@ -410,222 +512,724 @@ if not st.session_state.auth_ok:
 
     st.stop()
 
-
 # =================================================================
 # CARREGAR PRODUTOS
 # =================================================================
 
 if 'df_produtos' not in st.session_state:
 
-    with st.spinner("Sincronizando produtos..."):
+    with st.spinner("Sincronizando com Google Sheets..."):
 
         st.session_state.df_produtos = carregar_produtos_google()
 
 df_produtos = st.session_state.df_produtos
-
 
 # =================================================================
 # CABEÇALHO
 # =================================================================
 
 st.markdown(f"""
-<div style="background:#1E1E1E;padding:8px 15px;border-radius:8px;border-left:8px solid #FF4B4B;margin-bottom:15px;display:flex;justify-content:space-between;align-items:center;">
+<div style="background-color: #1E1E1E;
+padding: 8px 15px;
+border-radius: 8px;
+border-left: 8px solid #FF4B4B;
+margin-bottom: 15px;
+display:flex;
+justify-content:space-between;
+align-items:center">
+
 <div>
 
-<h2 style="color:white;margin:0;font-size:20px;">📊 PCP | CRONOGRAMA</h2>
-<p style="color:#888;margin:2px 0 0 0;font-size:12px;">👤 {st.session_state.user_email}</p>
+<h2 style="color:white;margin:0;font-size:20px">
+📊 PCP <span style="color:#FF4B4B">|</span> CRONOGRAMA DE MÁQUINAS
+</h2>
 
-</div>
-
-<div style="text-align:center;border:1px solid #FF4B4B;padding:2px 15px;border-radius:5px;background:#0E1117;">
-<h3 style="color:#FF4B4B;margin:0;font-family:'Courier New';font-size:22px;">
-⏰ {agora.strftime('%H:%M:%S')}
-</h3>
-<p style="color:#aaa;margin:-2px 0 2px 0;font-size:12px;border-top:1px dashed #FF4B4B;padding-top:2px;">
-{agora.strftime('%d/%m/%Y')}
+<p style="color:#888;margin:2px 0 0 0;font-size:12px">
+👤 Usuário: {st.session_state.user_email}
 </p>
+
+</div>
+
+<div style="text-align:center;
+border:1px solid #FF4B4B;
+padding:2px 15px;
+border-radius:5px;
+background-color:#0E1117;
+min-width:130px">
+
+<h3 style="color:#FF4B4B;
+margin:0;
+font-family:Courier New;
+font-size:22px">
+
+⏰ {agora.strftime('%H:%M:%S')}
+
+</h3>
+
+<p style="color:#aaa;
+margin:-2px 0 2px 0;
+font-size:12px;
+border-top:1px dashed #FF4B4B;
+padding-top:2px">
+
+{agora.strftime('%d/%m/%Y')}
+
+</p>
+
 </div>
 </div>
-""",unsafe_allow_html=True)
-
-
+""", unsafe_allow_html=True)
 # =================================================================
-# ABAS
+# 4. GRÁFICOS E STATUS
 # =================================================================
 
-aba1, aba2, aba3, aba4 = st.tabs(["➕ Lançar OP","🎨 Serigrafia","🍼 Sopro","⚙️ Gerenciar"])
+def renderizar_setor(lista_maquinas, altura=500, pos_y_agora=-0.30):
 
+    df_all = carregar_dados()
 
-# =================================================================
-# LANÇAMENTO
-# =================================================================
-
-with aba1:
-
-    st.subheader("➕ Nova Ordem de Produção")
-
-    c1,c2 = st.columns(2)
-
-    with c1:
-
-        maq_sel = st.selectbox("Máquina",TODAS_MAQUINAS)
-
-        item_sel = st.selectbox(
-            "Item",
-            df_produtos["id_item"].tolist()
-        )
-
-        descricao = get_descricao_produto(item_sel)
-
-        st.text_input("Descrição",value=descricao,disabled=True)
-
-    with c2:
-
-        op_num = st.text_input("Número OP")
-
-        qtd_lanc = st.number_input("Quantidade",value=CARGA_UNIDADE)
-
-    st.divider()
-
-    sugestao = proximo_horario(maq_sel)
-
-    c3,c4 = st.columns(2)
-
-    data_ini = c3.date_input("Data início",sugestao.date())
-    hora_ini = c4.time_input("Hora início",sugestao.time())
-
-    minutos_setup = st.number_input("Tempo setup (min)",value=30)
-
-    if st.button("🚀 AGENDAR",use_container_width=True):
-
-        inicio_dt = datetime.combine(data_ini,hora_ini)
-
-        fim_dt = inicio_dt + timedelta(hours=qtd_lanc/CADENCIA_PADRAO)
-
-        producao_id = inserir_producao(
-            maq_sel,
-            f"OP:{op_num}",
-            item_sel,
-            inicio_dt,
-            fim_dt,
-            qtd_lanc,
-            st.session_state.user_email
-        )
-
-        fim_setup = fim_dt + timedelta(minutes=minutos_setup)
-
-        inserir_setup(
-            maq_sel,
-            f"SETUP {op_num}",
-            fim_dt,
-            fim_setup,
-            producao_id,
-            st.session_state.user_email
-        )
-
-        st.success("OP criada com sucesso")
-        st.rerun()
-
-
-# =================================================================
-# FUNÇÃO GANTT
-# =================================================================
-
-def renderizar_setor(maquinas):
-
-    df = carregar_dados()
-
-    df = df[df["maquina"].isin(maquinas)]
-
-    if df.empty:
-
-        st.info("Sem programação")
+    if df_all.empty:
+        st.info("Nenhuma OP agendada.")
         return
 
+    df_g = df_all[df_all["maquina"].isin(lista_maquinas)].copy()
+
+    if df_g.empty:
+        st.info("Sem dados para este setor.")
+        return
+
+
+    # =============================
+    # STATUS DINÂMICO
+    # =============================
+
+    df_g["status_cor"] = df_g["status"]
+
+    df_g.loc[
+        (df_g["inicio"] <= agora) &
+        (df_g["fim"] >= agora) &
+        (df_g["status"] == "Pendente"),
+        "status_cor"
+    ] = "Executando"
+
+
+    df_g["cor_barra"] = df_g["status_cor"]
+
+    df_g.loc[
+        (df_g["fim"] < agora) &
+        (df_g["status"] == "Pendente"),
+        "cor_barra"
+    ] = "Atrasada"
+
+    df_g.loc[df_g["status"] == "Setup", "cor_barra"] = "Setup"
+    df_g.loc[df_g["status"] == "Manutenção", "cor_barra"] = "Manutenção"
+
+
+    # =============================
+    # FORMATAR DATAS
+    # =============================
+
+    df_g["fim_formatado"] = df_g["fim"].dt.strftime('%d/%m %H:%M')
+    df_g["ini_formatado"] = df_g["inicio"].dt.strftime('%d/%m %H:%M')
+
+
+    # =============================
+    # CRIAR GANTT
+    # =============================
+
     fig = px.timeline(
-        df,
+        df_g,
         x_start="inicio",
         x_end="fim",
         y="maquina",
-        color="status",
-        text="rotulo_barra"
+        color="cor_barra",
+        text="rotulo_barra",
+        category_orders={"maquina": lista_maquinas},
+
+        color_discrete_map={
+            "Pendente": "#3498db",
+            "Concluído": "#2ecc71",
+            "Setup": "#7f7f7f",
+            "Executando": "#ff7f0e",
+            "Atrasada": "#FF4B4B",
+            "Manutenção": "#9b59b6"
+        },
+
+        custom_data=[
+            "pedido",
+            "item",
+            "qtd",
+            "ini_formatado",
+            "fim_formatado"
+        ]
     )
 
-    fig.update_yaxes(autorange="reversed")
+    fig.update_traces(
 
-    fig.add_vline(
-        x=agora,
-        line_dash="dash",
-        line_color="red"
+        hovertemplate="<br>".join([
+            "<b>📦 OP: %{customdata[0]}</b>",
+            "🔧 <b>Item:</b> %{customdata[1]}",
+            "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
+            "⏱️ <b>Início programado:</b> %{customdata[3]}",
+            "⏱️ <b>Término programado:</b> %{customdata[4]}",
+            "⚙️ <b>Cadência:</b> 2380 unid/hora",
+            "<extra></extra>"
+        ])
     )
 
-    st.plotly_chart(fig,use_container_width=True)
+
+    fig.update_yaxes(
+        autorange="reversed",
+        title="",
+        showgrid=True,
+        gridcolor='rgba(255,255,255,0.15)',
+        zeroline=False
+    )
 
 
-# =================================================================
-# SERIGRAFIA
-# =================================================================
-
-with aba2:
-
-    renderizar_setor(MAQUINAS_SERIGRAFIA)
+    fig.update_traces(
+        textposition='inside',
+        insidetextanchor='start',
+        width=0.92
+    )
 
 
-# =================================================================
-# SOPRO
-# =================================================================
+    fig.update_xaxes(
 
-with aba3:
+        type='date',
 
-    renderizar_setor(MAQUINAS_SOPRO)
+        range=[
+            agora - timedelta(hours=2),
+            agora + timedelta(hours=36)
+        ],
+
+        dtick=10800000,
+
+        tickformat="%H:%M\n%d/%m",
+
+        gridcolor='rgba(255,255,255,0.1)',
+
+        showgrid=True,
+
+        tickangle=0,
+
+        tickfont=dict(size=11)
+    )
+
+    fig.update_traces(
+
+        hovertemplate="<br>".join([
+            "<b>📦 OP: %{customdata[0]}</b>",
+            "🔧 <b>Item:</b> %{customdata[1]}",
+            "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
+            "⏱️ <b>Início programado:</b> %{customdata[3]}",
+            "⏱️ <b>Término programado:</b> %{customdata[4]}",
+            "⚙️ <b>Cadência:</b> 2380 unid/hora",
+            "<extra></extra>"
+        ])
+    )
 
 
-# =================================================================
-# GERENCIAR
-# =================================================================
+    fig.update_yaxes(
+        autorange="reversed",
+        title="",
+        showgrid=True,
+        gridcolor='rgba(255,255,255,0.15)',
+        zeroline=False
+    )
 
-with aba4:
 
-    df = carregar_dados()
+    fig.update_traces(
+        textposition='inside',
+        insidetextanchor='start',
+        width=0.92
+    )
 
-    df = df[df["status"].isin(["Pendente","Setup","Manutenção"])]
 
-    if df.empty:
+    fig.update_xaxes(
 
-        st.info("Nenhuma OP programada")
-        st.stop()
+        type='date',
 
-    for _,prod in df.sort_values("inicio").iterrows():
+        range=[
+            agora - timedelta(hours=2),
+            agora + timedelta(hours=36)
+        ],
 
-        with st.expander(f"{prod['maquina']} | {prod['pedido']}"):
+        dtick=10800000,
 
-            st.write("Item:",prod["item"])
-            st.write("Início:",prod["inicio"])
-            st.write("Fim:",prod["fim"])
+        tickformat="%H:%M\n%d/%m",
 
-            col1,col2,col3 = st.columns(3)
+        gridcolor='rgba(255,255,255,0.1)',
 
-            if col1.button("Finalizar",key=f"f{prod['id']}"):
+        showgrid=True,
 
-                finalizar_op(prod["id"])
-                st.rerun()
+        tickangle=0,
 
-            if col2.button("Deletar",key=f"d{prod['id']}"):
+        tickfont=dict(size=11)
+    )
 
-                deletar_op(prod["id"])
-                st.rerun()
+    # ============================================================
+    # OPs ATRASADAS
+    # ============================================================
 
-            if col3.button("Reprogramar",key=f"r{prod['id']}"):
+    ops_atrasadas = df_g[
+        (df_g["fim"] < agora) &
+        (df_g["status"] == "Pendente")
+    ]
 
-                novo_inicio = prod["inicio"] + timedelta(hours=1)
+    if not ops_atrasadas.empty:
 
-                novo_fim = prod["fim"] + timedelta(hours=1)
+        st.markdown("#### 🚨 OPs ATRASADAS")
 
-                reprogramar_op(
-                    prod["id"],
-                    novo_inicio,
-                    novo_fim,
+        for i in range(0, len(ops_atrasadas), 3):
+
+            cols = st.columns(3)
+
+            for j in range(3):
+
+                if i + j < len(ops_atrasadas):
+
+                    op = ops_atrasadas.iloc[i + j]
+
+                    descricao_produto = get_descricao_produto(op['item'])
+
+                    with cols[j]:
+
+                        st.markdown(f"""
+                        <div style="background-color:#FF4B4B20;
+                        padding:15px;
+                        border-radius:10px;
+                        border-left:5px solid #FF4B4B">
+
+                        <p style="color:#FF4B4B;font-weight:bold">
+                        🏭 {op['maquina']}
+                        </p>
+
+                        <p style="color:white;margin:0">
+                        Item: {op['item']}
+                        </p>
+
+                        <p style="color:white;margin:0">
+                        Descrição: {descricao_produto}
+                        </p>
+
+                        <p style="color:white;margin:0">
+                        QTD: {int(op['qtd'])}
+                        </p>
+
+                        <p style="color:#aaa;margin-top:5px">
+                        Deveria terminar: {op['fim'].strftime('%d/%m %H:%M')}
+                        </p>
+
+                        </div>
+                        """, unsafe_allow_html=True)
+
+        st.divider()
+
+    # ============================================================
+    # MÁQUINAS SEM OP
+    # ============================================================
+
+    maquinas_com_op = df_g[df_g["status"] == "Pendente"]["maquina"].unique()
+
+    maquinas_sem_programacao = [
+        m for m in lista_maquinas if m not in maquinas_com_op
+    ]
+
+    if maquinas_sem_programacao:
+
+        st.markdown("#### 💤 Máquinas sem Programação")
+
+        for i in range(0, len(maquinas_sem_programacao), 4):
+
+            cols = st.columns(4)
+
+            for j in range(4):
+
+                if i + j < len(maquinas_sem_programacao):
+
+                    with cols[j]:
+
+                        maq = maquinas_sem_programacao[i + j]
+
+                        st.markdown(f"""
+                        <div style="background-color:#7f7f7f20;
+                        padding:10px;
+                        border-radius:10px;
+                        border-left:5px solid #7f7f7f;
+                        text-align:center">
+
+                        <p style="color:#7f7f7f;font-weight:bold">
+                        🏭 {maq}
+                        </p>
+
+                        <p style="color:#aaa">
+                        Sem OP
+                        </p>
+
+                        </div>
+                        """, unsafe_allow_html=True)
+
+        st.divider()
+
+    # ============================================================
+    # MÉTRICAS
+    # ============================================================
+
+    st.markdown("#### 📊 Métricas Gerais")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    atrasadas_count = len(ops_atrasadas)
+
+    em_uso_count = (
+        ops_em_execucao["maquina"].nunique()
+        if not ops_em_execucao.empty else 0
+    )
+
+    total_setor = len(lista_maquinas)
+
+    total_ops = df_g[df_g["status"] == "Pendente"].shape[0]
+
+    c1.metric("🚨 OPs Atrasadas", atrasadas_count)
+
+    c2.metric("⚙️ OPs em Execução", em_uso_count)
+
+    c3.metric("📦 Total OPs Pendentes", total_ops)
+
+    if total_setor > 0:
+        ocup = (em_uso_count / total_setor) * 100
+        c4.metric("📈 Taxa de Ocupação", f"{ocup:.1f}%")
+    else:
+        c4.metric("📈 Taxa de Ocupação", "0%")
+
+    st.divider()
+
+    # ============================================================
+    # MÉTRICAS
+    # ============================================================
+
+    st.markdown("#### 📊 Métricas Gerais")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    atrasadas_count = len(ops_atrasadas)
+
+    em_uso_count = (
+        ops_em_execucao["maquina"].nunique()
+        if not ops_em_execucao.empty else 0
+    )
+
+    total_setor = len(lista_maquinas)
+
+    total_ops = df_g[df_g["status"] == "Pendente"].shape[0]
+
+    c1.metric("🚨 OPs Atrasadas", atrasadas_count)
+
+    c2.metric("⚙️ OPs em Execução", em_uso_count)
+
+    c3.metric("📦 Total OPs Pendentes", total_ops)
+
+    if total_setor > 0:
+        ocup = (em_uso_count / total_setor) * 100
+        c4.metric("📈 Taxa de Ocupação", f"{ocup:.1f}%")
+    else:
+        c4.metric("📈 Taxa de Ocupação", "0%")
+
+    st.divider()
+
+with aba1:
+
+    with st.container(border=True):
+
+        st.subheader("➕ Novo Lançamento")
+
+        df_prod = st.session_state.df_produtos.copy()
+        df_prod['id_item'] = df_prod['id_item'].astype(str).str.strip()
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            maq_sel = st.selectbox(
+                "🏭 Máquina destino",
+                TODAS_MAQUINAS
+            )
+
+            opcoes_itens = df_prod['id_item'].tolist()
+
+            item_sel = st.selectbox(
+                "📌 Selecione o ID_ITEM",
+                opcoes_itens
+            )
+
+            descricao_texto = "N/A"
+            cliente_texto = "N/A"
+            carga_sugerida = CARGA_UNIDADE
+
+            if item_sel:
+
+                produto_info = df_prod[df_prod['id_item'] == item_sel]
+
+                if not produto_info.empty:
+
+                    info = produto_info.iloc[0]
+
+                    descricao_texto = info['descricao']
+                    cliente_texto = info['cliente']
+                    carga_sugerida = int(info['qtd_carga'])
+
+            st.text_input(
+                "📝 Descrição",
+                value=descricao_texto,
+                disabled=True
+            )
+
+        with c2:
+
+            op_num = st.text_input("🔢 Número da OP")
+
+            st.text_input(
+                "👥 Cliente",
+                value=cliente_texto,
+                disabled=True
+            )
+
+            qtd_lanc = st.number_input(
+                "📊 Quantidade Total",
+                value=carga_sugerida
+            )
+
+        sugestao_h = proximo_horario(maq_sel)
+
+        d1, d2 = st.columns(2)
+
+        data_ini = d1.date_input(
+            "📅 Data",
+            sugestao_h.date()
+        )
+
+        hora_ini = d2.time_input(
+            "⏰ Hora",
+            sugestao_h.time()
+        )
+
+        if st.button("🚀 CONFIRMAR E AGENDAR"):
+
+            if op_num and item_sel:
+
+                inicio_dt = datetime.combine(data_ini, hora_ini)
+
+                fim_dt = inicio_dt + timedelta(
+                    hours=qtd_lanc / CADENCIA_PADRAO
+                )
+
+                inserir_producao(
+                    maq_sel,
+                    f"{cliente_texto} | OP:{op_num}",
+                    item_sel,
+                    inicio_dt,
+                    fim_dt,
+                    qtd_lanc,
                     st.session_state.user_email
                 )
 
+                st.success("OP lançada com sucesso!")
+
                 st.rerun()
+
+            else:
+
+                st.error("Preencha OP e Item")
+
+with aba1:
+
+    with st.container(border=True):
+
+        st.subheader("➕ Novo Lançamento")
+
+        df_prod = st.session_state.df_produtos.copy()
+        df_prod['id_item'] = df_prod['id_item'].astype(str).str.strip()
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            maq_sel = st.selectbox(
+                "🏭 Máquina destino",
+                TODAS_MAQUINAS
+            )
+
+            opcoes_itens = df_prod['id_item'].tolist()
+
+            item_sel = st.selectbox(
+                "📌 Selecione o ID_ITEM",
+                opcoes_itens
+            )
+
+            descricao_texto = "N/A"
+            cliente_texto = "N/A"
+            carga_sugerida = CARGA_UNIDADE
+
+            if item_sel:
+
+                produto_info = df_prod[df_prod['id_item'] == item_sel]
+
+                if not produto_info.empty:
+
+                    info = produto_info.iloc[0]
+
+                    descricao_texto = info['descricao']
+                    cliente_texto = info['cliente']
+                    carga_sugerida = int(info['qtd_carga'])
+
+            st.text_input(
+                "📝 Descrição",
+                value=descricao_texto,
+                disabled=True
+            )
+
+        with c2:
+
+            op_num = st.text_input("🔢 Número da OP")
+
+            st.text_input(
+                "👥 Cliente",
+                value=cliente_texto,
+                disabled=True
+            )
+
+            qtd_lanc = st.number_input(
+                "📊 Quantidade Total",
+                value=carga_sugerida
+            )
+
+        sugestao_h = proximo_horario(maq_sel)
+
+        d1, d2 = st.columns(2)
+
+        data_ini = d1.date_input(
+            "📅 Data",
+            sugestao_h.date()
+        )
+
+        hora_ini = d2.time_input(
+            "⏰ Hora",
+            sugestao_h.time()
+        )
+
+        if st.button("🚀 CONFIRMAR E AGENDAR"):
+
+            if op_num and item_sel:
+
+                inicio_dt = datetime.combine(data_ini, hora_ini)
+
+                fim_dt = inicio_dt + timedelta(
+                    hours=qtd_lanc / CADENCIA_PADRAO
+                )
+
+                inserir_producao(
+                    maq_sel,
+                    f"{cliente_texto} | OP:{op_num}",
+                    item_sel,
+                    inicio_dt,
+                    fim_dt,
+                    qtd_lanc,
+                    st.session_state.user_email
+                )
+
+                st.success("OP lançada com sucesso!")
+
+                st.rerun()
+
+            else:
+
+                st.error("Preencha OP e Item")
+
+with aba4:
+
+    st.subheader("⚙️ Gerenciamento de OPs")
+
+    df_ger = carregar_dados()
+
+    if not df_ger.empty:
+
+        df_programadas = df_ger[
+            df_ger["status"].isin(["Pendente","Setup","Manutenção"])
+        ]
+
+        for _, prod in df_programadas.iterrows():
+
+            with st.expander(
+                f"{prod['maquina']} | {prod['pedido']}"
+            ):
+
+                st.write("Item:", prod["item"])
+                st.write("Início:", prod["inicio"])
+                st.write("Fim:", prod["fim"])
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+
+                    if st.button(
+                        "✅ Finalizar",
+                        key=f"ok_{prod['id']}"
+                    ):
+
+                        finalizar_op(prod["id"])
+                        st.rerun()
+
+                with col2:
+
+                    if st.button(
+                        "🗑️ Deletar",
+                        key=f"del_{prod['id']}"
+                    ):
+
+                        deletar_op(prod["id"])
+                        st.rerun()
+
+    else:
+
+        st.info("Nenhuma OP cadastrada")
+
+with aba5:
+
+    st.subheader("📋 Produtos")
+
+    st.dataframe(
+        df_produtos,
+        use_container_width=True
+    )
+
+with aba6:
+
+    df_c = carregar_dados()
+
+    if not df_c.empty:
+
+        df_p = df_c[
+            (df_c["status"] == "Pendente") &
+            (df_c["qtd"] > 0)
+        ]
+
+        total_cargas = (
+            df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]["qtd"].sum()
+            / CARGA_UNIDADE
+        )
+
+        st.metric(
+            "Total Geral de Cargas Sopro",
+            f"{total_cargas:.1f}"
+        )
+
+        st.table(
+            df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]
+            [["maquina","pedido","qtd"]]
+        )
+
+st.divider()
+
+st.caption(
+    "v7.1 | Industrial By William | PCP Serigrafia + Sopro | Supabase Edition"
+)

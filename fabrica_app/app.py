@@ -37,8 +37,10 @@ st.sidebar.write("Banco em uso:", DB_PATH)
 # FUNÇÃO DE CONEXÃO
 # =================================================================
 
+DATABASE_URL = "postgresql://postgres:[YOUR-PASSWORD]@db.ogxrgnaedmcbaqgryosg.supabase.co:5432/postgres"
+
 def conectar():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+    return psycopg2.connect(DATABASE_URL)
 
 
 # =================================================================

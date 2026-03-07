@@ -115,4 +115,199 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
             )
         )
         
-        conn.commit
+        conn.commit()
+        return producao_id
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao inserir produção: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
+    conn = conectar()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute(
+            """
+            INSERT INTO agenda
+            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                maquina,
+                pedido,
+                "Ajuste",
+                inicio,
+                fim,
+                "Setup",
+                0,
+                vinculo,
+                usuario,
+                agora
+            )
+        )
+        
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao inserir setup: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+def finalizar_op(id_op):
+    conn = conectar()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE agenda SET status='Concluído' WHERE id=%s",
+        (id_op,)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def deletar_op(id_op):
+    conn = conectar()
+    cur = conn.cursor()
+    
+    cur.execute(
+        "DELETE FROM agenda WHERE id=%s OR vinculo_id=%s",
+        (id_op, id_op)
+    )
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def reprogramar_op(id_op, novo_inicio, usuario):
+    conn = conectar()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("""
+            SELECT id, maquina, inicio, fim, vinculo_id, status, qtd 
+            FROM agenda 
+            WHERE id = %s OR vinculo_id = %s
+            ORDER BY inicio
+        """, (id_op, id_op))
+        
+        registros = cur.fetchall()
+        
+        if not registros:
+            return
+        
+        setup = None
+        producao = None
+        
+        for reg in registros:
+            if reg[5] == "Setup":
+                setup = reg
+            else:
+                producao = reg
+        
+        if not producao:
+            return
+        
+        producao_id, maquina, old_inicio, old_fim, vinculo_id, status, qtd = producao
+        
+        novo_fim = calcular_fim_op(novo_inicio, qtd)
+        
+        cur.execute(
+            """
+            UPDATE agenda 
+            SET inicio = %s, fim = %s, alterado_por = %s, alterado_em = %s
+            WHERE id = %s
+            """,
+            (novo_inicio, novo_fim, usuario, agora, producao_id)
+        )
+        
+        if setup:
+            setup_id, _, setup_inicio, setup_fim, _, _, _ = setup
+            novo_setup_inicio = novo_inicio - timedelta(minutes=SETUP_DURACAO)
+            novo_setup_fim = novo_inicio
+            
+            cur.execute(
+                """
+                UPDATE agenda 
+                SET inicio = %s, fim = %s, alterado_por = %s, alterado_em = %s
+                WHERE id = %s
+                """,
+                (novo_setup_inicio, novo_setup_fim, usuario, agora, setup_id)
+            )
+        
+        cur.execute("""
+            SELECT id, inicio, fim, vinculo_id, status, qtd
+            FROM agenda
+            WHERE maquina = %s 
+                AND status IN ('Pendente', 'Setup')
+                AND id != %s 
+                AND (vinculo_id != %s OR vinculo_id IS NULL)
+                AND inicio > %s
+            ORDER BY inicio
+        """, (maquina, producao_id, producao_id, old_fim))
+        
+        seguintes = cur.fetchall()
+        
+        current_end = novo_fim
+        
+        for seguinte in seguintes:
+            seg_id, seg_inicio, seg_fim, seg_vinculo, seg_status, seg_qtd = seguinte
+            
+            if seg_status == "Setup":
+                cur.execute("SELECT id, inicio FROM agenda WHERE vinculo_id = %s AND status = 'Pendente'", (seg_vinculo or seg_id,))
+                prod_vinculada = cur.fetchone()
+                
+                if prod_vinculada:
+                    prod_id, prod_inicio = prod_vinculada
+                    novo_setup_inicio = current_end
+                    novo_setup_fim = current_end + timedelta(minutes=SETUP_DURACAO)
+                    
+                    cur.execute(
+                        "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                        (novo_setup_inicio, novo_setup_fim, seg_id)
+                    )
+                    
+                    novo_prod_inicio = novo_setup_fim
+                    novo_prod_fim = calcular_fim_op(novo_prod_inicio, seg_qtd if seg_qtd > 0 else qtd)
+                    
+                    cur.execute(
+                        "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                        (novo_prod_inicio, novo_prod_fim, prod_id)
+                    )
+                    
+                    current_end = novo_prod_fim
+                else:
+                    duracao = (seg_fim - seg_inicio).total_seconds() / 60
+                    novo_setup_inicio = current_end
+                    novo_setup_fim = current_end + timedelta(minutes=duracao)
+                    
+                    cur.execute(
+                        "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                        (novo_setup_inicio, novo_setup_fim, seg_id)
+                    )
+                    
+                    current_end = novo_setup_fim
+            else:
+                novo_seg_inicio = current_end
+                novo_seg_fim = calcular_fim_op(novo_seg_inicio, seg_qtd)
+                
+                cur.execute(
+                    "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                    (novo_seg_inicio, novo_seg_fim, seg_id)
+                )
+                
+                current_end = novo_seg_fim
+        
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao reprogramar: {e}")
+    finally:
+        cur.close()
+        conn.close()

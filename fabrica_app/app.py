@@ -25,8 +25,6 @@ st.set_page_config(
 
 DB_PATH = "/mount/data/pcp.db"
 
-os.makedirs("/mount/data", exist_ok=True)
-
 st.write("Banco utilizado:", DB_PATH)
 
 

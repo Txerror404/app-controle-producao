@@ -140,3 +140,246 @@ st.markdown("""
 
 </style>
 """, unsafe_allow_html=True)
+
+# =================================================================
+# BUSCAR DESCRIÇÃO DO PRODUTO
+# =================================================================
+
+def get_descricao_produto(id_item):
+
+    if 'df_produtos' in st.session_state:
+
+        df_produtos = st.session_state.df_produtos
+
+        if df_produtos is not None and not df_produtos.empty:
+
+            produto = df_produtos[df_produtos['id_item'] == str(id_item)]
+
+            if not produto.empty:
+                return produto.iloc[0]['descricao']
+
+    return "Descrição não encontrada"
+
+
+# =================================================================
+# CARREGAR PRODUTOS DO GOOGLE SHEETS
+# =================================================================
+
+@st.cache_data(ttl=600)
+def carregar_produtos_google():
+
+    try:
+
+        df = pd.read_csv(GOOGLE_SHEETS_URL)
+
+        df.columns = df.columns.str.strip()
+
+        df['id_item'] = df['ID_ITEM'].astype(str).str.strip()
+        df['descricao'] = df['DESCRIÇÃO_1'].astype(str).str.strip()
+        df['cliente'] = df['CLIENTE'].astype(str).str.strip()
+
+        df['qtd_carga'] = pd.to_numeric(
+            df['QTD/CARGA'].astype(str).str.replace(',', '.'),
+            errors='coerce'
+        ).fillna(CARGA_UNIDADE)
+
+        return df.fillna('N/A')
+
+    except Exception:
+        return pd.DataFrame(columns=['id_item','descricao','cliente','qtd_carga'])
+
+
+# =================================================================
+# CARREGAR DADOS DO BANCO (SUPABASE)
+# =================================================================
+
+def carregar_dados():
+
+    conn = conectar()
+
+    df = pd.read_sql_query(
+        "SELECT * FROM agenda",
+        conn
+    )
+
+    conn.close()
+
+    if not df.empty:
+
+        df["inicio"] = pd.to_datetime(df["inicio"])
+        df["fim"] = pd.to_datetime(df["fim"])
+        df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
+
+        df["rotulo_barra"] = df.apply(
+            lambda r: "🔧 SETUP" if r['status']=="Setup"
+            else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}",
+            axis=1
+        )
+
+    return df
+
+
+# =================================================================
+# PRÓXIMO HORÁRIO LIVRE DA MÁQUINA
+# =================================================================
+
+def proximo_horario(maq):
+
+    df = carregar_dados()
+
+    if not df.empty:
+
+        df_maq = df[
+            (df["maquina"] == maq) &
+            (df["status"].isin(["Pendente","Setup","Manutenção"]))
+        ]
+
+        if not df_maq.empty:
+
+            ultimo_fim = df_maq["fim"].max()
+
+            return max(agora, ultimo_fim)
+
+    return agora
+
+
+# =================================================================
+# INSERIR PRODUÇÃO
+# =================================================================
+
+def inserir_producao(maquina,pedido,item,inicio,fim,qtd,usuario):
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO agenda
+        (maquina,pedido,item,inicio,fim,status,qtd,criado_por,criado_em)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        RETURNING id
+        """,
+        (
+            maquina,
+            pedido,
+            item,
+            inicio,
+            fim,
+            "Pendente",
+            qtd,
+            usuario,
+            agora
+        )
+    )
+
+    producao_id = cur.fetchone()[0]
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return producao_id
+
+
+# =================================================================
+# INSERIR SETUP
+# =================================================================
+
+def inserir_setup(maquina,pedido,inicio,fim,vinculo,usuario):
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO agenda
+        (maquina,pedido,item,inicio,fim,status,qtd,vinculo_id,criado_por,criado_em)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            maquina,
+            pedido,
+            "Ajuste",
+            inicio,
+            fim,
+            "Setup",
+            0,
+            vinculo,
+            usuario,
+            agora
+        )
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# =================================================================
+# FINALIZAR OP
+# =================================================================
+
+def finalizar_op(id_op):
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute(
+        "UPDATE agenda SET status='Concluído' WHERE id=%s",
+        (id_op,)
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# =================================================================
+# DELETAR OP
+# =================================================================
+
+def deletar_op(id_op):
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute(
+        "DELETE FROM agenda WHERE id=%s OR vinculo_id=%s",
+        (id_op,id_op)
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# =================================================================
+# REPROGRAMAR OP
+# =================================================================
+
+def reprogramar_op(id_op,novo_inicio,novo_fim,usuario):
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE agenda
+        SET inicio=%s,
+            fim=%s,
+            alterado_por=%s,
+            alterado_em=%s
+        WHERE id=%s
+        """,
+        (
+            novo_inicio,
+            novo_fim,
+            usuario,
+            agora,
+            id_op
+        )
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()

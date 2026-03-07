@@ -125,6 +125,7 @@ def verificar_conflito(df, maquina, inicio_novo, fim_novo):
 
     return not conflito.empty
 
+
 # =================================================================
 # PRÓXIMO HORÁRIO
 # =================================================================

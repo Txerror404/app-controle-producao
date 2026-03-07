@@ -18,6 +18,8 @@ if os.path.exists("/mount/data"):
 else:
     DB_PATH = "pcp.db"
 
+st.write("Banco utilizado:", DB_PATH)
+
 
 # =================================================================
 # CONEXÃO COM BANCO

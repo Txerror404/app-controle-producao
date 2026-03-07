@@ -8,16 +8,25 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
+import os
+import shutil
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import sqlite3
+from datetime import datetime, timedelta
+import pytz
+from streamlit_autorefresh import st_autorefresh
+
 # =================================================================
 # DEFINIÇÃO DO BANCO
 # =================================================================
-
-import os
 
 if os.path.exists("/mount/data"):
     DB_PATH = "/mount/data/pcp.db"
 else:
     DB_PATH = "pcp.db"
+
 
 # =================================================================
 # BACKUP DO BANCO
@@ -38,6 +47,9 @@ def backup_banco():
         if not os.path.exists(destino):
 
             shutil.copy(DB_PATH, destino)
+
+
+backup_banco()
 # =================================================================
 # BUSCAR DESCRIÇÃO DO PRODUTO
 # =================================================================

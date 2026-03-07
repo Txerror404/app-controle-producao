@@ -39,7 +39,7 @@ st.sidebar.write("Banco em uso:", DB_PATH)
 # FUNÇÃO DE CONEXÃO
 # =================================================================
 
-DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaqgryosg:[pcp2026supabase]@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
+DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaqgryosg:[pcp2026supabase]@aws-0-us-west-2.pooler.supabase.com:6543/postgres"
 
 def conectar():
     return psycopg2.connect(DATABASE_URL)

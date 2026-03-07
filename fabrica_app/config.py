@@ -3,7 +3,6 @@
 # =================================================================
 
 import pytz
-from datetime import datetime
 
 # =================================================================
 # BANCO DE DADOS
@@ -40,10 +39,6 @@ SETUP_DURACAO = 30      # minutos
 # FUSO HORÁRIO - APENAS O FUSO, NÃO O HORÁRIO FIXO
 # =================================================================
 fuso_br = pytz.timezone("America/Sao_Paulo")
-
-# NOTA: 'agora' NÃO é definido aqui globalmente
-# Cada função deve calcular datetime.now(fuso_br).replace(tzinfo=None)
-# Isso garante que o horário seja atualizado a cada execução
 
 # =================================================================
 # GOOGLE SHEETS

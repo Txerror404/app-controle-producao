@@ -1,10 +1,10 @@
 import os
 import shutil
+import psycopg2
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import sqlite3
-import psycopg2
 from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
@@ -38,8 +38,6 @@ st.sidebar.write("Banco em uso:", DB_PATH)
 # =================================================================
 # FUNÇÃO DE CONEXÃO
 # =================================================================
-
-DATABASE_URL = import psycopg2
 
 DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaggryosg:pcp2026supabase@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
 

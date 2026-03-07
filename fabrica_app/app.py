@@ -45,6 +45,25 @@ def conectar():
         st.warning("Banco persistente indisponível, usando banco temporário.")
         return sqlite3.connect(fallback, check_same_thread=False)
 
+try:
+    with conectar() as conn:
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agenda (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                maquina TEXT,
+                pedido TEXT,
+                item TEXT,
+                inicio TEXT,
+                fim TEXT,
+                status TEXT,
+                qtd REAL,
+                vinculo_id INTEGER
+            )
+        """)
+
+except Exception as e:
+    st.error(f"Erro ao inicializar banco: {e}")
 # =================================================================
 # CRIAÇÃO DA TABELA (PROTEÇÃO DE HISTÓRICO)
 # =================================================================

@@ -7,6 +7,23 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
+#Backup
+
+def backup_banco():
+
+    if os.path.exists(DB_PATH):
+
+        pasta_backup = "/mount/data/backups"
+
+        os.makedirs(pasta_backup, exist_ok=True)
+
+        nome = datetime.now().strftime("backup_%Y%m%d.db")
+
+        destino = os.path.join(pasta_backup, nome)
+
+        if not os.path.exists(destino):
+
+            shutil.copy(DB_PATH, destino)
 # =================================================================
 # BUSCAR DESCRIÇÃO DO PRODUTO
 # =================================================================

@@ -65,9 +65,6 @@ def proximo_horario(maq):
 def calcular_fim_op(inicio, qtd):
     return inicio + timedelta(hours=qtd / CADENCIA_PADRAO)
 
-# =================================================================
-# INSERIR PRODUÇÃO - CORRIGIDO (sem criado_por/criado_em)
-# =================================================================
 def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
     conn = conectar()
     cur = conn.cursor()
@@ -94,7 +91,7 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
         
         producao_id = cur.fetchone()[0]
         
-        # Inserir setup
+        # Inserir setup de 30 minutos antes
         setup_inicio = inicio - timedelta(minutes=SETUP_DURACAO)
         setup_fim = inicio
         
@@ -127,9 +124,6 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
         cur.close()
         conn.close()
 
-# =================================================================
-# INSERIR SETUP MANUAL - CORRIGIDO (sem criado_por/criado_em)
-# =================================================================
 def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
     conn = conectar()
     cur = conn.cursor()
@@ -162,9 +156,6 @@ def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
         cur.close()
         conn.close()
 
-# =================================================================
-# FINALIZAR OP
-# =================================================================
 def finalizar_op(id_op):
     conn = conectar()
     cur = conn.cursor()
@@ -176,9 +167,6 @@ def finalizar_op(id_op):
     cur.close()
     conn.close()
 
-# =================================================================
-# DELETAR OP (E SEU SETUP)
-# =================================================================
 def deletar_op(id_op):
     conn = conectar()
     cur = conn.cursor()
@@ -192,9 +180,6 @@ def deletar_op(id_op):
     cur.close()
     conn.close()
 
-# =================================================================
-# REPROGRAMAR OP - CORRIGIDO (sem alterado_por/alterado_em)
-# =================================================================
 def reprogramar_op(id_op, novo_inicio, usuario):
     conn = conectar()
     cur = conn.cursor()
@@ -323,4 +308,3 @@ def reprogramar_op(id_op, novo_inicio, usuario):
     finally:
         cur.close()
         conn.close()
-        

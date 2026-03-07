@@ -193,22 +193,6 @@ st.markdown(f"""
 </div>
 """,unsafe_allow_html=True)
 
-# =================================================================
-# RESTANTE DO SISTEMA
-# =================================================================
-
-# TODO: Aqui permanece exatamente TODO o restante do seu código
-# renderizar_setor()
-# abas
-# lançamento
-# gantt
-# gerenciar
-# produtos
-# cargas
-# métricas
-# etc.
-
-# (Não alterei absolutamente nada nessas partes para preservar 100% do comportamento)
 
 st.divider()
 st.caption("v6.4 | Industrial By William | Serigrafia | Sopro | Hover Personalizado | Pesquisa na Gerenciar")

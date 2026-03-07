@@ -578,19 +578,6 @@ with aba1:
         data_ini = c5.date_input("📅 Data de Início", sugestao_h.date(), key="data_lanc")
         hora_ini = c6.time_input("⏰ Hora de Início", sugestao_h.time(), key="hora_lanc")
 
-# =================================================================
-# BOTÃO DE BACKUP DO BANCO
-# =================================================================
-
-st.divider()
-
-st.download_button(
-    label="💾 Baixar backup do banco de dados",
-    data=open(DB_PATH, "rb"),
-    file_name="backup_pcp.db",
-    mime="application/octet-stream"
-)
-        
         st.caption(f"⏱️ Sugestão baseada no fim da última OP: **{sugestao_h.strftime('%d/%m %H:%M')}**")
 
         if st.button("🚀 CONFIRMAR E AGENDAR", type="primary", use_container_width=True):

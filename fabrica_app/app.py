@@ -6,9 +6,10 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-from fabrica_app.db import criar_tabela, carregar_dados
-from fabrica_app.sheets import carregar_produtos_google
-from fabrica_app.utils import verificar_conflito
+# IMPORTS INTERNOS DO PROJETO
+from db import criar_tabela, carregar_dados
+from sheets import carregar_produtos_google
+from utils import verificar_conflito
 
 # =================================================================
 # INICIALIZAÇÃO DO BANCO

@@ -39,9 +39,11 @@ def renderizar_rodape():
 
 def renderizar_setor(lista_maquinas, altura=500):
     # =================================================================
-    # HORA ATUAL COM TIMEZONE - RECALCULADO A CADA EXECUÇÃO
+    # HORA ATUAL COM TIMEZONE - DEPOIS REMOVER TIMEZONE PARA COMPARAÇÃO
     # =================================================================
-    agora = datetime.now(pytz.timezone("America/Sao_Paulo"))
+    agora_com_timezone = datetime.now(pytz.timezone("America/Sao_Paulo"))
+    # REMOVER timezone para comparar com dados do banco (que são naive)
+    agora = agora_com_timezone.replace(tzinfo=None)
     
     df_all = carregar_dados()
     
@@ -165,15 +167,15 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     # =================================================================
-    # LINHA DO TEMPO "AGORA" - CORRETA (datetime object)
+    # LINHA DO TEMPO "AGORA" - USANDO DATETIME COM TIMEZONE PARA O GRÁFICO
     # =================================================================
     fig.add_vline(
-        x=agora,  # 👈 DATETIME OBJECT - CORRETO PARA EIXO TYPE='DATE'
+        x=agora_com_timezone,  # 👈 USAR O COM TIMEZONE PARA O GRÁFICO
         line_width=3,
         line_dash="dash",
         line_color="#E63946",
         opacity=0.9,
-        annotation_text=f" AGORA {agora.strftime('%H:%M')} ",
+        annotation_text=f" AGORA {agora_com_timezone.strftime('%H:%M')} ",
         annotation_position="top",
         annotation_font_size=12,
         annotation_font_color="#FFFFFF",

@@ -8,16 +8,6 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-import os
-import shutil
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import sqlite3
-from datetime import datetime, timedelta
-import pytz
-from streamlit_autorefresh import st_autorefresh
-
 # =================================================================
 # DEFINIÇÃO DO BANCO
 # =================================================================

@@ -24,22 +24,24 @@ else:
 
 def backup_banco():
 
-    if os.path.exists(DB_PATH):
+    try:
 
-        pasta_backup = "/mount/data/backups"
+        if os.path.exists(DB_PATH):
 
-        os.makedirs(pasta_backup, exist_ok=True)
+            pasta_backup = "/mount/data"
 
-        nome = datetime.now().strftime("backup_%Y%m%d.db")
+            nome = datetime.now().strftime("backup_%Y%m%d.db")
 
-        destino = os.path.join(pasta_backup, nome)
+            destino = os.path.join(pasta_backup, nome)
 
-        if not os.path.exists(destino):
+            if not os.path.exists(destino):
 
-            shutil.copy(DB_PATH, destino)
+                shutil.copy(DB_PATH, destino)
 
+    except PermissionError:
 
-backup_banco()
+        # se não puder criar backup, não quebra o sistema
+        pass
 # =================================================================
 # BUSCAR DESCRIÇÃO DO PRODUTO
 # =================================================================

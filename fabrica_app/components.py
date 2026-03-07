@@ -1,10 +1,10 @@
 # =================================================================
-# COMPONENTES VISUAIS REUTILIZÁVEIS
+# COMPONENTES VISUAIS REUTILIZÁVEIS - TIMELINE CORRIGIDA
 # =================================================================
 
 import streamlit as st
 import plotly.express as px
-from datetime import timedelta
+from datetime import timedelta, datetime
 from config import agora
 from database import carregar_dados
 from utils import get_descricao_produto
@@ -49,6 +49,10 @@ def renderizar_setor(lista_maquinas, altura=500):
     
     setor_nome = "SERIGRAFIA" if "maquina" in lista_maquinas[0] else "SOPRO"
     st.markdown(f"### 🏭 Setor {setor_nome}")
+    
+    # =================================================================
+    # GRÁFICO GANTT - TIMELINE CORRIGIDA
+    # =================================================================
     
     fig = px.timeline(
         df_g,
@@ -97,6 +101,9 @@ def renderizar_setor(lista_maquinas, altura=500):
         textfont=dict(color='white', size=11, family='Arial')
     )
     
+    # =================================================================
+    # CORREÇÃO 1: EIXO Y - Máquinas na ordem correta
+    # =================================================================
     fig.update_yaxes(
         autorange="reversed",
         title="",
@@ -104,36 +111,62 @@ def renderizar_setor(lista_maquinas, altura=500):
         gridcolor='#3A404C',
         zeroline=False,
         tickfont=dict(size=12, color='#E0E0E0'),
-        tickangle=0
+        tickangle=0,
+        categoryorder='array',
+        categoryarray=lista_maquinas  # 👈 Garante a ordem das máquinas
     )
+    
+    # =================================================================
+    # CORREÇÃO 2: EIXO X - Range expandido e marcações corretas
+    # =================================================================
+    
+    # Calcular ranges baseados no horário atual
+    inicio_range = agora.replace(hour=0, minute=0, second=0)  # Início do dia atual
+    fim_range = agora + timedelta(days=2)  # 48 horas à frente
+    fim_range = fim_range.replace(hour=23, minute=59, second=59)  # Final do dia
     
     fig.update_xaxes(
         type='date',
         range=[
-            agora - timedelta(hours=2),
-            agora + timedelta(hours=36)
+            inicio_range,  # 👈 Começa à 00:00 do dia atual
+            fim_range      # 👈 Termina no final de amanhã
         ],
-        dtick=10800000,
-        tickformat="%H:%M\n%d/%m",
-        gridcolor='#3A404C',
-        showgrid=True,
+        dtick=10800000,  # 3 horas em milissegundos (09:00, 12:00, 15:00...)
+        tickformat="%H:%M",  # 👈 Mostra apenas hora:minuto
         tickangle=0,
         tickfont=dict(size=11, color='#E0E0E0'),
-        title=""
+        title="",
+        showgrid=True,
+        gridcolor='#3A404C',
+        gridwidth=1,
+        # 👇 Configuração para mostrar TODOS os ticks de 3 em 3 horas
+        tickmode='linear',
+        tick0=inicio_range,  # 👈 Começa à 00:00
+        tickvals=None  # Deixa o Plotly calcular automaticamente
     )
     
+    # =================================================================
+    # CORREÇÃO 3: LINHA DO TEMPO "AGORA" - Posicionada corretamente
+    # =================================================================
     fig.add_vline(
-        x=agora.timestamp() * 1000,
+        x=agora.timestamp() * 1000,  # Converte para milissegundos (formato Plotly)
         line_width=3,
         line_dash="dash",
         line_color="#E63946",
-        opacity=0.8,
-        annotation_text="AGORA",
+        opacity=0.9,
+        annotation_text=f" AGORA {agora.strftime('%H:%M')} ",  # 👈 Mostra a hora atual
         annotation_position="top",
         annotation_font_size=12,
-        annotation_font_color="#E63946"
+        annotation_font_color="#FFFFFF",
+        annotation_bgcolor="#E63946",
+        annotation_bordercolor="#E63946",
+        annotation_borderpad=4,
+        annotation_borderwidth=1
     )
     
+    # =================================================================
+    # CORREÇÃO 4: LAYOUT GERAL
+    # =================================================================
     fig.update_layout(
         plot_bgcolor='#1A1E24',
         paper_bgcolor='#1A1E24',
@@ -142,24 +175,47 @@ def renderizar_setor(lista_maquinas, altura=500):
         legend=dict(
             bgcolor='#252A33',
             bordercolor='#3A404C',
-            font=dict(color='#E0E0E0')
+            font=dict(color='#E0E0E0'),
+            orientation='h',  # 👈 Legenda horizontal
+            yanchor='bottom',
+            y=1.02,
+            xanchor='right',
+            x=1
         ),
         hoverlabel=dict(
             bgcolor='#252A33',
             font_size=13,
             font_family='Arial',
             font_color='#FFFFFF'
+        ),
+        # 👇 Ajustes adicionais
+        xaxis=dict(
+            showline=True,
+            linewidth=1,
+            linecolor='#3A404C',
+            mirror=True
+        ),
+        yaxis=dict(
+            showline=True,
+            linewidth=1,
+            linecolor='#3A404C',
+            mirror=True
         )
     )
     
+    # =================================================================
+    # EXIBIR GRÁFICO COM ZOOM HABILITADO
+    # =================================================================
     st.plotly_chart(fig, use_container_width=True, config={
         'displayModeBar': True,
         'scrollZoom': True,
-        'modeBarButtonsToAdd': ['zoom', 'pan', 'select', 'zoomIn', 'zoomOut', 'autoScale', 'resetScale'],
+        'modeBarButtonsToAdd': ['zoom', 'pan', 'zoomIn', 'zoomOut', 'autoScale', 'resetScale'],
         'modeBarButtonsToRemove': ['lasso2d', 'select2d']
     })
     
-    # OPs atrasadas
+    # =================================================================
+    # OPs ATRASADAS
+    # =================================================================
     ops_atrasadas = df_g[df_g["atrasada"]]
     
     if not ops_atrasadas.empty:
@@ -190,7 +246,9 @@ def renderizar_setor(lista_maquinas, altura=500):
                 """, unsafe_allow_html=True)
         st.divider()
     
-    # OPs em execução
+    # =================================================================
+    # OPs EM EXECUÇÃO
+    # =================================================================
     ops_execucao = df_g[df_g["em_execucao"]]
     
     if not ops_execucao.empty:
@@ -221,7 +279,9 @@ def renderizar_setor(lista_maquinas, altura=500):
                 """, unsafe_allow_html=True)
         st.divider()
     
-    # Máquinas sem programação
+    # =================================================================
+    # MÁQUINAS SEM PROGRAMAÇÃO
+    # =================================================================
     maquinas_com_op = df_g[df_g["status"] == "Pendente"]["maquina"].unique()
     maquinas_sem_programacao = [
         m for m in lista_maquinas if m not in maquinas_com_op
@@ -244,7 +304,9 @@ def renderizar_setor(lista_maquinas, altura=500):
                 """, unsafe_allow_html=True)
         st.divider()
     
-    # Métricas
+    # =================================================================
+    # MÉTRICAS
+    # =================================================================
     st.markdown("#### 📊 Métricas Gerais")
     c1, c2, c3, c4 = st.columns(4)
     
@@ -267,3 +329,4 @@ def renderizar_setor(lista_maquinas, altura=500):
             st.metric("📈 Taxa de Ocupação", "0%")
     
     st.divider()
+    

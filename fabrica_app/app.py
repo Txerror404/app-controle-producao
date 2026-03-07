@@ -7,6 +7,25 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 
 # =================================================================
+# BUSCAR DESCRIÇÃO DO PRODUTO
+# =================================================================
+
+def get_descricao_produto(id_item):
+
+    if 'df_produtos' in st.session_state:
+
+        df_produtos = st.session_state.df_produtos
+
+        if df_produtos is not None and not df_produtos.empty:
+
+            produto = df_produtos[df_produtos['id_item'] == str(id_item)]
+
+            if not produto.empty:
+                return produto.iloc[0]['descricao']
+
+    return "Descrição não encontrada"
+
+# =================================================================
 # 1. CONFIGURAÇÕES GERAIS E ESTILO
 # =================================================================
 st.set_page_config(page_title="PCP Industrial - SISTEMA COMPLETO", layout="wide")

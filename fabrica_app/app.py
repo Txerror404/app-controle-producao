@@ -7,11 +7,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
-
 import time
-time.sleep(5)
-
-st.write("Banco utilizado:", DB_PATH)
 time.sleep(5)
 
 # =================================================================
@@ -23,15 +19,15 @@ st.set_page_config(
     layout="wide"
 )
 
-
 # =================================================================
 # DEFINIÇÃO DO BANCO
 # =================================================================
 
-if os.path.exists("/mount/data"):
-    DB_PATH = "/mount/data/pcp.db"
-else:
-    DB_PATH = "pcp.db"
+DB_PATH = "/mount/data/pcp.db"
+
+os.makedirs("/mount/data", exist_ok=True)
+
+st.write("Banco utilizado:", DB_PATH)
 
 
 # =================================================================

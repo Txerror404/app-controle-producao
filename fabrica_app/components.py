@@ -1,19 +1,19 @@
 # =================================================================
-# COMPONENTES VISUAIS REUTILIZÁVEIS - TIMELINE DINÂMICA
+# COMPONENTES VISUAIS REUTILIZÁVEIS - TIMELINE DINÂMICA CORRIGIDA
 # =================================================================
 
 import streamlit as st
 import plotly.express as px
-from datetime import timedelta, datetime
-from config import fuso_br
+from datetime import datetime, timedelta
+import pytz
 from database import carregar_dados
 from utils import get_descricao_produto
 
 def renderizar_cabecalho(email_usuario):
-    # Obtém horário atualizado a cada renderização
-    from config import fuso_br
-    from datetime import datetime
-    agora = datetime.now(fuso_br).replace(tzinfo=None)
+    # Fuso Brasil
+    fuso = pytz.timezone("America/Sao_Paulo")
+    # Hora atual SEMPRE recalculada
+    agora = datetime.now(fuso).replace(tzinfo=None)
     
     st.markdown(f"""
     <div class="custom-header">
@@ -41,11 +41,10 @@ def renderizar_rodape():
 
 def renderizar_setor(lista_maquinas, altura=500):
     # =================================================================
-    # OBTÉM HORÁRIO ATUALIZADO A CADA EXECUÇÃO
+    # FUSO BRASIL E HORA ATUAL - RECALCULADO A CADA EXECUÇÃO
     # =================================================================
-    from config import fuso_br
-    from datetime import datetime
-    agora = datetime.now(fuso_br).replace(tzinfo=None)
+    fuso = pytz.timezone("America/Sao_Paulo")
+    agora = datetime.now(fuso).replace(tzinfo=None)
     
     df_all = carregar_dados()
     
@@ -169,10 +168,10 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     # =================================================================
-    # LINHA DO TEMPO "AGORA" - Posicionada com o horário ATUAL
+    # LINHA DO TEMPO "AGORA" - CORRIGIDA USANDO datetime DIRETO
     # =================================================================
     fig.add_vline(
-        x=agora.timestamp() * 1000,  # Converte para milissegundos (formato Plotly)
+        x=agora,  # 👈 Passando datetime direto (Plotly converte automaticamente)
         line_width=3,
         line_dash="dash",
         line_color="#E63946",

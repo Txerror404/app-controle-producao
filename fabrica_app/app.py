@@ -23,7 +23,7 @@ st.set_page_config(
 # CONFIGURAÇÃO DO BANCO SUPABASE
 # =================================================================
 
-DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaggryosg:pcp2026supabase@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
+DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaggryosg:pcp2026supabase@aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require"
 
 
 # =================================================================

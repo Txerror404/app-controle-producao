@@ -31,13 +31,11 @@ DATABASE_URL = "postgresql://postgres.ogxrgnaedmcbaggryosg:pcp2026supabase@aws-0
 # =================================================================
 
 def conectar():
-    try:
-        conn = psycopg2.connect(
-            DATABASE_URL,
-            connect_timeout=10,
-            sslmode="require"
-        )
-        return conn
+    conn = psycopg2.connect(
+        DATABASE_URL,
+        connect_timeout=10
+    )
+    return conn
 
     except Exception as e:
         st.error(f"Erro ao conectar no Supabase: {e}")

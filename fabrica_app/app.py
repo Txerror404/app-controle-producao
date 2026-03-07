@@ -105,8 +105,6 @@ def get_descricao_produto(id_item):
 # =================================================================
 # 1. CONFIGURAÇÕES GERAIS E ESTILO
 # =================================================================
-st.set_page_config(page_title="PCP Industrial - SISTEMA COMPLETO", layout="wide")
-st_autorefresh(interval=120000, key="pcp_refresh_global")
 
 ADMIN_EMAIL = "will@admin.com.br"
 OPERACIONAL_EMAIL = ["sarita@will.com.br", "oneida@will.com.br"]

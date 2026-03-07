@@ -10,7 +10,7 @@ from database import carregar_dados
 from utils import get_descricao_produto
 
 def renderizar_cabecalho(email_usuario):
-    # Hora atual com timezone
+    # Hora atual com timezone para o relógio
     agora = datetime.now(pytz.timezone("America/Sao_Paulo"))
     
     st.markdown(f"""
@@ -39,7 +39,7 @@ def renderizar_rodape():
 
 def renderizar_setor(lista_maquinas, altura=500):
     # =================================================================
-    # HORA ATUAL COM TIMEZONE - DEPOIS REMOVER TIMEZONE PARA COMPARAÇÃO
+    # HORA ATUAL - SEM TIMEZONE PARA COMPARAÇÕES E GRÁFICO
     # =================================================================
     agora_com_timezone = datetime.now(pytz.timezone("America/Sao_Paulo"))
     # REMOVER timezone para comparar com dados do banco (que são naive)
@@ -167,22 +167,37 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     # =================================================================
-    # LINHA DO TEMPO "AGORA" - USANDO DATETIME COM TIMEZONE PARA O GRÁFICO
+    # LINHA DO TEMPO "AGORA" - USANDO add_shape + add_annotation (MAIS ROBUSTO)
     # =================================================================
-    fig.add_vline(
-        x=agora_com_timezone,  # 👈 USAR O COM TIMEZONE PARA O GRÁFICO
-        line_width=3,
-        line_dash="dash",
-        line_color="#E63946",
-        opacity=0.9,
-        annotation_text=f" AGORA {agora_com_timezone.strftime('%H:%M')} ",
-        annotation_position="top",
-        annotation_font_size=12,
-        annotation_font_color="#FFFFFF",
-        annotation_bgcolor="#E63946",
-        annotation_bordercolor="#E63946",
-        annotation_borderpad=4,
-        annotation_borderwidth=1
+    
+    # Adicionar linha vertical
+    fig.add_shape(
+        type="line",
+        x0=agora,
+        x1=agora,
+        y0=0,
+        y1=1,
+        xref="x",
+        yref="paper",
+        line=dict(
+            color="#E63946",
+            width=3,
+            dash="dash"
+        )
+    )
+    
+    # Adicionar rótulo "AGORA"
+    fig.add_annotation(
+        x=agora,
+        y=1.05,
+        xref="x",
+        yref="paper",
+        text=f" AGORA {agora.strftime('%H:%M')} ",
+        showarrow=False,
+        font=dict(color="white", size=12),
+        bgcolor="#E63946",
+        bordercolor="#E63946",
+        borderpad=4
     )
     
     # =================================================================

@@ -14,7 +14,7 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(
     page_title="PCP Industrial - SISTEMA COMPLETO",
     layout="wide",
-    initial_sidebar_state="collapsed"  # 👈 VISUAL: sidebar recolhida
+    initial_sidebar_state="collapsed"
 )
 
 
@@ -121,16 +121,17 @@ GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0
 
 
 # =================================================================
-# ESTILO DA INTERFACE - CORRIGIDO
+# ESTILO DA INTERFACE - TEMA CLARO PROFISSIONAL
 # =================================================================
-# 👇 VISUAL: CSS restaurado com padding original e estilo das abas
+# 👇 VISUAL: Todas as cores ajustadas para tema claro
 st.markdown("""
 <style>
-    /* Container principal com padding reduzido */
+    /* Container principal */
     .block-container {
         padding-top: 0.5rem !important;
         padding-bottom: 1rem !important;
         max-width: 100% !important;
+        background-color: #F5F7FA;
     }
     
     /* Esconder toolbar do Plotly */
@@ -142,7 +143,7 @@ st.markdown("""
         opacity: 1 !important;
     }
     
-    /* Estilo das abas como botões */
+    /* Estilo das abas como botões - TEMA CLARO */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: transparent;
@@ -150,143 +151,177 @@ st.markdown("""
     }
     
     .stTabs [data-baseweb="tab"] {
-        background-color: #1e1e1e;
+        background-color: #F0F0F0;
         border-radius: 6px;
         padding: 8px 20px;
-        color: #cccccc;
+        color: #2C3E50;
         font-weight: 500;
-        border: 1px solid #333333;
+        border: 1px solid #E0E0E0;
         transition: all 0.2s;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: #2d2d2d;
-        color: white;
-        border-color: #FF4B4B;
+        background-color: #E0E0E0;
+        color: #E63946;
+        border-color: #E63946;
     }
     
     .stTabs [aria-selected="true"] {
-        background-color: #FF4B4B !important;
+        background-color: #E63946 !important;
         color: white !important;
-        border-color: #FF4B4B !important;
+        border-color: #E63946 !important;
     }
     
-    /* Cards de métricas */
+    /* Cards de métricas - TEMA CLARO */
     div[data-testid="metric-container"] {
-        background-color: #1E1E1E;
-        border: 1px solid #333333;
+        background-color: #FFFFFF;
+        border: 1px solid #E0E0E0;
         padding: 15px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
     div[data-testid="metric-container"] label {
-        color: #cccccc !important;
+        color: #7F8C8D !important;
+        font-size: 14px !important;
     }
     
     div[data-testid="metric-container"] div {
-        color: white !important;
+        color: #2C3E50 !important;
+        font-size: 24px !important;
+        font-weight: 600 !important;
     }
     
-    /* Headers */
-    h2, h3, h4 {
+    /* Headers - TEMA CLARO */
+    h1, h2, h3, h4, h5, h6 {
+        color: #2C3E50 !important;
         margin-top: 0.5rem !important;
         margin-bottom: 0.5rem !important;
     }
     
-    /* Divisores mais sutis */
+    /* Divisores */
     hr {
         margin-top: 1rem !important;
         margin-bottom: 1rem !important;
-        border-color: #333333 !important;
+        border-color: #E0E0E0 !important;
     }
     
-    /* Expanders */
+    /* Expanders - TEMA CLARO */
     .streamlit-expanderHeader {
-        background-color: #1E1E1E;
+        background-color: #FFFFFF;
         border-radius: 6px;
-        border: 1px solid #333333;
+        border: 1px solid #E0E0E0;
+        color: #2C3E50 !important;
     }
     
-    /* Inputs e selects */
+    .streamlit-expanderContent {
+        background-color: #F5F7FA;
+        border: 1px solid #E0E0E0;
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+    }
+    
+    /* Inputs e selects - TEMA CLARO */
     div[data-baseweb="select"] > div {
-        background-color: #1E1E1E !important;
-        border-color: #333333 !important;
+        background-color: #FFFFFF !important;
+        border-color: #E0E0E0 !important;
     }
     
-    input, textarea {
-        background-color: #1E1E1E !important;
-        border-color: #333333 !important;
-        color: white !important;
+    input, textarea, [data-baseweb="input"] input {
+        background-color: #FFFFFF !important;
+        border-color: #E0E0E0 !important;
+        color: #2C3E50 !important;
     }
     
-    /* Botões */
+    label {
+        color: #7F8C8D !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Botões - TEMA CLARO */
     .stButton button {
-        background-color: #1E1E1E;
-        border: 1px solid #FF4B4B;
-        color: #FF4B4B;
+        background-color: #FFFFFF;
+        border: 1px solid #E63946;
+        color: #E63946;
         border-radius: 6px;
         transition: all 0.2s;
         width: 100%;
+        font-weight: 500;
     }
     
     .stButton button:hover {
-        background-color: #FF4B4B;
+        background-color: #E63946;
         color: white;
-        border-color: #FF4B4B;
+        border-color: #E63946;
     }
     
-    /* Cards de status personalizados */
+    /* Cards de status personalizados - TEMA CLARO */
     .status-card-atrasada {
-        background-color: rgba(255, 75, 75, 0.15);
+        background-color: rgba(230, 57, 70, 0.08);
         padding: 15px;
         border-radius: 10px;
-        border-left: 6px solid #FF4B4B;
+        border-left: 6px solid #E63946;
         margin-bottom: 10px;
+        border: 1px solid #E0E0E0;
     }
     
     .status-card-execucao {
-        background-color: rgba(255, 127, 14, 0.15);
+        background-color: rgba(243, 156, 18, 0.08);
         padding: 15px;
         border-radius: 10px;
-        border-left: 6px solid #ff7f0e;
+        border-left: 6px solid #F39C12;
         margin-bottom: 10px;
+        border: 1px solid #E0E0E0;
     }
     
     .status-card-semop {
-        background-color: rgba(127, 127, 127, 0.15);
+        background-color: rgba(149, 165, 166, 0.08);
         padding: 15px;
         border-radius: 10px;
-        border-left: 6px solid #7f7f7f;
+        border-left: 6px solid #95A5A6;
         margin-bottom: 10px;
         text-align: center;
+        border: 1px solid #E0E0E0;
     }
     
-    /* Cabeçalho customizado */
+    /* Cabeçalho customizado - TEMA CLARO */
     .custom-header {
-        background-color: #1E1E1E;
+        background-color: #FFFFFF;
         padding: 8px 15px;
         border-radius: 8px;
-        border-left: 8px solid #FF4B4B;
+        border-left: 8px solid #E63946;
         margin-bottom: 15px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border: 1px solid #333333;
+        border: 1px solid #E0E0E0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .custom-header h2 {
+        color: #2C3E50 !important;
+        margin: 0;
+        font-size: 20px;
+    }
+    
+    .custom-header p {
+        color: #7F8C8D !important;
+        margin: 2px 0 0 0;
+        font-size: 12px;
     }
     
     .clock-box {
         text-align: center;
-        border: 1px solid #FF4B4B;
+        border: 1px solid #E63946;
         padding: 2px 15px;
         border-radius: 5px;
-        background-color: #0E1117;
+        background-color: #F5F7FA;
         min-width: 130px;
-        box-shadow: 0 2px 4px rgba(255, 75, 75, 0.2);
+        box-shadow: 0 2px 4px rgba(230, 57, 70, 0.1);
     }
     
     .clock-time {
-        color: #FF4B4B;
+        color: #E63946;
         margin: 0;
         font-family: 'Courier New', monospace;
         font-size: 22px;
@@ -294,21 +329,71 @@ st.markdown("""
     }
     
     .clock-date {
-        color: #aaaaaa;
+        color: #7F8C8D;
         margin: -2px 0 2px 0;
         font-size: 12px;
-        border-top: 1px dashed #FF4B4B;
+        border-top: 1px dashed #E63946;
         padding-top: 2px;
     }
     
-    /* Rodapé */
+    /* Rodapé - TEMA CLARO */
     .footer {
         text-align: center;
-        color: #666666;
+        color: #95A5A6;
         font-size: 12px;
         padding: 20px 0 10px 0;
-        border-top: 1px solid #333333;
+        border-top: 1px solid #E0E0E0;
         margin-top: 30px;
+    }
+    
+    /* Texto em geral */
+    p, li, .stMarkdown {
+        color: #2C3E50 !important;
+    }
+    
+    /* Info boxes */
+    .stAlert {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E0E0E0 !important;
+        color: #2C3E50 !important;
+    }
+    
+    /* Dataframes */
+    .dataframe {
+        background-color: #FFFFFF !important;
+        color: #2C3E50 !important;
+    }
+    
+    /* Popovers */
+    div[data-testid="stPopover"] {
+        background-color: #FFFFFF;
+        border: 1px solid #E0E0E0;
+    }
+    
+    /* Selectbox dropdown */
+    div[data-baseweb="popover"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E0E0E0 !important;
+    }
+    
+    li[role="option"] {
+        color: #2C3E50 !important;
+    }
+    
+    li[role="option"]:hover {
+        background-color: #F0F0F0 !important;
+    }
+    
+    /* Número de inputs */
+    .stNumberInput input {
+        background-color: #FFFFFF !important;
+        color: #2C3E50 !important;
+    }
+    
+    /* Date input e time input */
+    .stDateInput input, .stTimeInput input {
+        background-color: #FFFFFF !important;
+        color: #2C3E50 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -363,20 +448,15 @@ def carregar_dados():
         df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
         
-        # Rótulo para as barras
         df["rotulo_barra"] = df.apply(
             lambda r: "🔧 SETUP" if r['status'] == "Setup"
             else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}",
             axis=1
         )
         
-        # Identificar OPs em execução
         df["em_execucao"] = (df["inicio"] <= agora) & (df["fim"] >= agora) & (df["status"] == "Pendente")
-        
-        # Identificar OPs atrasadas
         df["atrasada"] = (df["fim"] < agora) & (df["status"] == "Pendente")
         
-        # Cor da barra baseada no status
         df["cor_barra"] = "Pendente"
         df.loc[df["status"] == "Setup", "cor_barra"] = "Setup"
         df.loc[df["status"] == "Manutenção", "cor_barra"] = "Manutenção"
@@ -384,7 +464,6 @@ def carregar_dados():
         df.loc[df["em_execucao"], "cor_barra"] = "Executando"
         df.loc[df["atrasada"], "cor_barra"] = "Atrasada"
         
-        # Formatar datas para hover
         df["fim_formatado"] = df["fim"].dt.strftime('%d/%m %H:%M')
         df["ini_formatado"] = df["inicio"].dt.strftime('%d/%m %H:%M')
         
@@ -696,7 +775,7 @@ if "auth_ok" not in st.session_state:
     st.session_state.auth_ok = False
 
 if not st.session_state.auth_ok:
-    st.markdown("<h1 style='text-align:center;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;color:#2C3E50;'>🏭 PCP Industrial</h1>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1,1.5,1])
     with col2:
         email = st.text_input("E-mail autorizado:").lower().strip()
@@ -720,16 +799,15 @@ df_produtos = st.session_state.df_produtos
 
 
 # =================================================================
-# CABEÇALHO - CORRIGIDO
+# CABEÇALHO - TEMA CLARO
 # =================================================================
-# 👇 VISUAL: Header com classes CSS personalizadas
 st.markdown(f"""
 <div class="custom-header">
     <div>
-        <h2 style="color:white;margin:0;font-size:20px">
-            📊 PCP <span style="color:#FF4B4B">|</span> CRONOGRAMA DE MÁQUINAS
+        <h2 style="margin:0;font-size:20px;color:#2C3E50;">
+            📊 PCP <span style="color:#E63946;">|</span> CRONOGRAMA DE MÁQUINAS
         </h2>
-        <p style="color:#888;margin:2px 0 0 0;font-size:12px">
+        <p style="color:#7F8C8D;margin:2px 0 0 0;font-size:12px;">
             👤 Usuário: {st.session_state.user_email}
         </p>
     </div>
@@ -742,7 +820,7 @@ st.markdown(f"""
 
 
 # =================================================================
-# FUNÇÃO PARA RENDERIZAR SETOR - CORRIGIDA (VISUAL)
+# FUNÇÃO PARA RENDERIZAR SETOR - COM CORES AJUSTADAS
 # =================================================================
 
 def renderizar_setor(lista_maquinas, altura=500):
@@ -758,11 +836,10 @@ def renderizar_setor(lista_maquinas, altura=500):
         st.info("Sem dados para este setor.")
         return
     
-    # 👇 VISUAL: Título do setor
     setor_nome = "SERIGRAFIA" if "maquina" in lista_maquinas[0] else "SOPRO"
     st.markdown(f"### 🏭 Setor {setor_nome}")
     
-    # 👇 VISUAL: Criar Gantt com visual melhorado
+    # 👇 VISUAL: Gráfico com cores ajustadas para tema claro
     fig = px.timeline(
         df_g,
         x_start="inicio",
@@ -772,12 +849,12 @@ def renderizar_setor(lista_maquinas, altura=500):
         text="rotulo_barra",
         category_orders={"maquina": lista_maquinas},
         color_discrete_map={
-            "Pendente": "#3498db",      # Azul
-            "Concluído": "#2ecc71",      # Verde
-            "Setup": "#7f7f7f",           # Cinza
-            "Executando": "#ff7f0e",      # Laranja
-            "Atrasada": "#FF4B4B",        # Vermelho
-            "Manutenção": "#9b59b6"       # Roxo
+            "Pendente": "#3498DB",      # Azul
+            "Concluído": "#27AE60",      # Verde
+            "Setup": "#95A5A6",           # Cinza
+            "Executando": "#F39C12",      # Laranja
+            "Atrasada": "#E63946",        # Vermelho
+            "Manutenção": "#8E44AD"       # Roxo
         },
         custom_data=[
             "pedido",
@@ -790,86 +867,82 @@ def renderizar_setor(lista_maquinas, altura=500):
         height=altura
     )
     
-    # 👇 VISUAL: Configuração das barras (mais grossas)
     fig.update_traces(
         hovertemplate="<br>".join([
-            "<b style='font-size:14px'>📦 OP: %{customdata[0]}</b>",
-            "🔧 <b>Item:</b> %{customdata[1]}",
-            "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
-            "⏱️ <b>Início:</b> %{customdata[3]}",
-            "⏱️ <b>Término:</b> %{customdata[4]}",
-            "⚙️ <b>Status:</b> %{customdata[5]}",
-            "⚙️ <b>Cadência:</b> 2.380 unid/hora",
+            "<b style='font-size:14px;color:#2C3E50;'>📦 OP: %{customdata[0]}</b>",
+            "<span style='color:#2C3E50;'>🔧 <b>Item:</b> %{customdata[1]}</span>",
+            "<span style='color:#2C3E50;'>📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades</span>",
+            "<span style='color:#2C3E50;'>⏱️ <b>Início:</b> %{customdata[3]}</span>",
+            "<span style='color:#2C3E50;'>⏱️ <b>Término:</b> %{customdata[4]}</span>",
+            "<span style='color:#2C3E50;'>⚙️ <b>Status:</b> %{customdata[5]}</span>",
+            "<span style='color:#2C3E50;'>⚙️ <b>Cadência:</b> 2.380 unid/hora</span>",
             "<extra></extra>"
         ]),
         textposition='inside',
         insidetextanchor='start',
-        width=0.95,  # 👈 Barras mais grossas
-        marker=dict(line=dict(width=2, color='#333333')),  # 👈 Borda nas barras
+        width=0.95,
+        marker=dict(line=dict(width=1, color='#FFFFFF')),
         opacity=0.9,
-        selector=dict(type='bar')
+        selector=dict(type='bar'),
+        textfont=dict(color='white', size=11, family='Arial')
     )
     
-    # 👇 VISUAL: Eixo Y
     fig.update_yaxes(
         autorange="reversed",
         title="",
         showgrid=True,
-        gridcolor='rgba(255,255,255,0.1)',  # 👈 Grid mais suave
+        gridcolor='#E0E0E0',
         zeroline=False,
-        tickfont=dict(size=12, color='#cccccc'),
+        tickfont=dict(size=12, color='#2C3E50'),
         tickangle=0
     )
     
-    # 👇 VISUAL: Eixo X com range otimizado
     fig.update_xaxes(
         type='date',
         range=[
             agora - timedelta(hours=2),
             agora + timedelta(hours=36)
         ],
-        dtick=10800000,  # 3 horas em milissegundos
+        dtick=10800000,
         tickformat="%H:%M\n%d/%m",
-        gridcolor='rgba(255,255,255,0.1)',
+        gridcolor='#E0E0E0',
         showgrid=True,
         tickangle=0,
-        tickfont=dict(size=11, color='#cccccc'),
+        tickfont=dict(size=11, color='#2C3E50'),
         title=""
     )
     
-    # 👇 VISUAL: Linha vertical do tempo atual (mais destacada)
     fig.add_vline(
         x=agora.timestamp() * 1000,
         line_width=3,
         line_dash="dash",
-        line_color="#FF4B4B",
+        line_color="#E63946",
         opacity=0.8,
         annotation_text="AGORA",
         annotation_position="top",
         annotation_font_size=12,
-        annotation_font_color="#FF4B4B"
+        annotation_font_color="#E63946"
     )
     
-    # 👇 VISUAL: Layout geral do gráfico
     fig.update_layout(
-        plot_bgcolor='#0E1117',
-        paper_bgcolor='#0E1117',
-        font=dict(color='#ffffff'),
-        margin=dict(l=50, r=20, t=40, b=40),  # 👈 Margens ajustadas
+        plot_bgcolor='#FFFFFF',
+        paper_bgcolor='#FFFFFF',
+        font=dict(color='#2C3E50'),
+        margin=dict(l=50, r=20, t=40, b=40),
         legend=dict(
-            bgcolor='#1E1E1E',
-            bordercolor='#333333',
-            font=dict(color='#ffffff')
+            bgcolor='#FFFFFF',
+            bordercolor='#E0E0E0',
+            font=dict(color='#2C3E50')
         ),
         hoverlabel=dict(
-            bgcolor='#1E1E1E',
+            bgcolor='#FFFFFF',
             font_size=13,
             font_family='Arial',
-            font_color='white'
+            font_color='#2C3E50'
         )
     )
     
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})  # 👈 Esconder toolbar
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
     # OPs atrasadas
     ops_atrasadas = df_g[df_g["atrasada"]]
@@ -881,22 +954,21 @@ def renderizar_setor(lista_maquinas, altura=500):
             if i >= 3: break
             descricao_produto = get_descricao_produto(op['item'])
             with cols[i % 3]:
-                # 👇 VISUAL: Card com classe CSS
                 st.markdown(f"""
                 <div class="status-card-atrasada">
-                    <p style="color:#FF4B4B;font-weight:bold;margin:0 0 10px 0">
+                    <p style="color:#E63946;font-weight:bold;margin:0 0 10px 0;font-size:16px;">
                         🏭 {op['maquina']}
                     </p>
-                    <p style="color:white;margin:5px 0">
+                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
                         <b>Item:</b> {op['item']}
                     </p>
-                    <p style="color:white;margin:5px 0">
+                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
                         <b>Descrição:</b> {descricao_produto[:50]}...
                     </p>
-                    <p style="color:white;margin:5px 0">
+                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
                         <b>QTD:</b> {int(op['qtd']):,}
                     </p>
-                    <p style="color:#aaa;margin:10px 0 0 0;font-size:12px">
+                    <p style="color:#7F8C8D;margin:10px 0 0 0;font-size:12px;">
                         ⏱️ Deveria terminar: {op['fim'].strftime('%d/%m %H:%M')}
                     </p>
                 </div>
@@ -913,22 +985,21 @@ def renderizar_setor(lista_maquinas, altura=500):
             if i >= 3: break
             descricao_produto = get_descricao_produto(op['item'])
             with cols[i % 3]:
-                # 👇 VISUAL: Card com classe CSS
                 st.markdown(f"""
                 <div class="status-card-execucao">
-                    <p style="color:#ff7f0e;font-weight:bold;margin:0 0 10px 0">
+                    <p style="color:#F39C12;font-weight:bold;margin:0 0 10px 0;font-size:16px;">
                         🏭 {op['maquina']}
                     </p>
-                    <p style="color:white;margin:5px 0">
+                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
                         <b>Item:</b> {op['item']}
                     </p>
-                    <p style="color:white;margin:5px 0">
+                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
                         <b>Descrição:</b> {descricao_produto[:50]}...
                     </p>
-                    <p style="color:white;margin:5px 0">
+                    <p style="color:#2C3E50;margin:5px 0;font-size:14px;">
                         <b>QTD:</b> {int(op['qtd']):,}
                     </p>
-                    <p style="color:#aaa;margin:10px 0 0 0;font-size:12px">
+                    <p style="color:#7F8C8D;margin:10px 0 0 0;font-size:12px;">
                         ⏱️ Término previsto: {op['fim'].strftime('%d/%m %H:%M')}
                     </p>
                 </div>
@@ -944,15 +1015,14 @@ def renderizar_setor(lista_maquinas, altura=500):
     if maquinas_sem_programacao:
         st.markdown("#### 💤 Máquinas sem Programação")
         cols = st.columns(4)
-        for i, maq in enumerate(maquinas_sem_programacao[:4]):  # Mostrar apenas 4
+        for i, maq in enumerate(maquinas_sem_programacao[:4]):
             with cols[i]:
-                # 👇 VISUAL: Card com classe CSS
                 st.markdown(f"""
                 <div class="status-card-semop">
-                    <p style="color:#7f7f7f;font-weight:bold;margin:0">
+                    <p style="color:#95A5A6;font-weight:bold;margin:0;font-size:16px;">
                         🏭 {maq}
                     </p>
-                    <p style="color:#aaa;margin:5px 0 0 0">
+                    <p style="color:#7F8C8D;margin:5px 0 0 0;font-size:14px;">
                         Sem OP
                     </p>
                 </div>
@@ -1266,9 +1336,8 @@ with tab6:
 
 
 # =================================================================
-# RODAPÉ - CORRIGIDO
+# RODAPÉ - TEMA CLARO
 # =================================================================
-# 👇 VISUAL: Rodapé com estilo
 st.markdown("""
 <div class="footer">
     v7.3 | Industrial By William | PCP Serigrafia + Sopro | Setup automático 30min | Reprogramação em cascata

@@ -19,6 +19,8 @@ st.set_page_config(
     layout="wide"
 )
 
+st.success("Conectado ao Supabase")
+
 
 # =================================================================
 # DEFINIÇÃO DO BANCO

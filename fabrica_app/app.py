@@ -13,7 +13,8 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(
     page_title="PCP Industrial - SISTEMA COMPLETO",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"  # 👈 VISUAL: sidebar recolhida
 )
 
 
@@ -120,23 +121,195 @@ GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0
 
 
 # =================================================================
-# ESTILO DA INTERFACE
+# ESTILO DA INTERFACE - CORRIGIDO
 # =================================================================
-
+# 👇 VISUAL: CSS restaurado com padding original e estilo das abas
 st.markdown("""
 <style>
-.block-container {padding-top:0.5rem;}
-.modebar-container {top:0!important;}
-.stTabs [data-baseweb="tab-list"] {gap:10px;}
-.stTabs [data-baseweb="tab"]{
-background-color:#1e1e1e;
-border-radius:5px;
-padding:5px 20px;
-color:white;
-}
-.stTabs [aria-selected="true"]{
-background-color:#FF4B4B!important;
-}
+    /* Container principal com padding reduzido */
+    .block-container {
+        padding-top: 0.5rem !important;
+        padding-bottom: 1rem !important;
+        max-width: 100% !important;
+    }
+    
+    /* Esconder toolbar do Plotly */
+    .modebar-container {
+        top: 0 !important;
+        opacity: 0.3 !important;
+    }
+    .modebar-container:hover {
+        opacity: 1 !important;
+    }
+    
+    /* Estilo das abas como botões */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+        padding: 0px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1e1e1e;
+        border-radius: 6px;
+        padding: 8px 20px;
+        color: #cccccc;
+        font-weight: 500;
+        border: 1px solid #333333;
+        transition: all 0.2s;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #2d2d2d;
+        color: white;
+        border-color: #FF4B4B;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #FF4B4B !important;
+        color: white !important;
+        border-color: #FF4B4B !important;
+    }
+    
+    /* Cards de métricas */
+    div[data-testid="metric-container"] {
+        background-color: #1E1E1E;
+        border: 1px solid #333333;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    div[data-testid="metric-container"] label {
+        color: #cccccc !important;
+    }
+    
+    div[data-testid="metric-container"] div {
+        color: white !important;
+    }
+    
+    /* Headers */
+    h2, h3, h4 {
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* Divisores mais sutis */
+    hr {
+        margin-top: 1rem !important;
+        margin-bottom: 1rem !important;
+        border-color: #333333 !important;
+    }
+    
+    /* Expanders */
+    .streamlit-expanderHeader {
+        background-color: #1E1E1E;
+        border-radius: 6px;
+        border: 1px solid #333333;
+    }
+    
+    /* Inputs e selects */
+    div[data-baseweb="select"] > div {
+        background-color: #1E1E1E !important;
+        border-color: #333333 !important;
+    }
+    
+    input, textarea {
+        background-color: #1E1E1E !important;
+        border-color: #333333 !important;
+        color: white !important;
+    }
+    
+    /* Botões */
+    .stButton button {
+        background-color: #1E1E1E;
+        border: 1px solid #FF4B4B;
+        color: #FF4B4B;
+        border-radius: 6px;
+        transition: all 0.2s;
+        width: 100%;
+    }
+    
+    .stButton button:hover {
+        background-color: #FF4B4B;
+        color: white;
+        border-color: #FF4B4B;
+    }
+    
+    /* Cards de status personalizados */
+    .status-card-atrasada {
+        background-color: rgba(255, 75, 75, 0.15);
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 6px solid #FF4B4B;
+        margin-bottom: 10px;
+    }
+    
+    .status-card-execucao {
+        background-color: rgba(255, 127, 14, 0.15);
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 6px solid #ff7f0e;
+        margin-bottom: 10px;
+    }
+    
+    .status-card-semop {
+        background-color: rgba(127, 127, 127, 0.15);
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 6px solid #7f7f7f;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+    
+    /* Cabeçalho customizado */
+    .custom-header {
+        background-color: #1E1E1E;
+        padding: 8px 15px;
+        border-radius: 8px;
+        border-left: 8px solid #FF4B4B;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #333333;
+    }
+    
+    .clock-box {
+        text-align: center;
+        border: 1px solid #FF4B4B;
+        padding: 2px 15px;
+        border-radius: 5px;
+        background-color: #0E1117;
+        min-width: 130px;
+        box-shadow: 0 2px 4px rgba(255, 75, 75, 0.2);
+    }
+    
+    .clock-time {
+        color: #FF4B4B;
+        margin: 0;
+        font-family: 'Courier New', monospace;
+        font-size: 22px;
+        font-weight: bold;
+    }
+    
+    .clock-date {
+        color: #aaaaaa;
+        margin: -2px 0 2px 0;
+        font-size: 12px;
+        border-top: 1px dashed #FF4B4B;
+        padding-top: 2px;
+    }
+    
+    /* Rodapé */
+    .footer {
+        text-align: center;
+        color: #666666;
+        font-size: 12px;
+        padding: 20px 0 10px 0;
+        border-top: 1px solid #333333;
+        margin-top: 30px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -252,7 +425,6 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
     cur = conn.cursor()
     
     try:
-        # Inserir a produção
         cur.execute(
             """
             INSERT INTO agenda
@@ -275,7 +447,6 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
         
         producao_id = cur.fetchone()[0]
         
-        # Inserir setup de 30 minutos antes
         setup_inicio = inicio - timedelta(minutes=SETUP_DURACAO)
         setup_fim = inicio
         
@@ -374,7 +545,6 @@ def deletar_op(id_op):
     conn = conectar()
     cur = conn.cursor()
     
-    # Deletar a OP e seu setup vinculado
     cur.execute(
         "DELETE FROM agenda WHERE id=%s OR vinculo_id=%s",
         (id_op, id_op)
@@ -394,7 +564,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
     cur = conn.cursor()
     
     try:
-        # Buscar a OP atual e seu setup
         cur.execute("""
             SELECT id, maquina, inicio, fim, vinculo_id, status, qtd 
             FROM agenda 
@@ -407,7 +576,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         if not registros:
             return
         
-        # Separar setup e produção
         setup = None
         producao = None
         
@@ -420,13 +588,10 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         if not producao:
             return
         
-        # Calcular novos horários
         producao_id, maquina, old_inicio, old_fim, vinculo_id, status, qtd = producao
         
-        # Novo fim baseado na quantidade
         novo_fim = calcular_fim_op(novo_inicio, qtd)
         
-        # Atualizar a produção
         cur.execute(
             """
             UPDATE agenda 
@@ -436,7 +601,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
             (novo_inicio, novo_fim, usuario, agora, producao_id)
         )
         
-        # Se tiver setup, atualizar também
         if setup:
             setup_id, _, setup_inicio, setup_fim, _, _, _ = setup
             novo_setup_inicio = novo_inicio - timedelta(minutes=SETUP_DURACAO)
@@ -451,7 +615,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
                 (novo_setup_inicio, novo_setup_fim, usuario, agora, setup_id)
             )
         
-        # Buscar todas as OPs seguintes na mesma máquina
         cur.execute("""
             SELECT id, inicio, fim, vinculo_id, status, qtd
             FROM agenda
@@ -465,16 +628,12 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         
         seguintes = cur.fetchall()
         
-        # Recalcular horários das OPs seguintes
         current_end = novo_fim
         
         for seguinte in seguintes:
             seg_id, seg_inicio, seg_fim, seg_vinculo, seg_status, seg_qtd = seguinte
             
-            # Calcular novo início (após a OP anterior)
             if seg_status == "Setup":
-                # Setup deve começar antes da produção
-                # Encontrar a produção vinculada
                 cur.execute("SELECT id, inicio FROM agenda WHERE vinculo_id = %s AND status = 'Pendente'", (seg_vinculo or seg_id,))
                 prod_vinculada = cur.fetchone()
                 
@@ -488,7 +647,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
                         (novo_setup_inicio, novo_setup_fim, seg_id)
                     )
                     
-                    # Atualizar produção vinculada
                     novo_prod_inicio = novo_setup_fim
                     novo_prod_fim = calcular_fim_op(novo_prod_inicio, seg_qtd if seg_qtd > 0 else qtd)
                     
@@ -499,7 +657,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
                     
                     current_end = novo_prod_fim
                 else:
-                    # Setup sem produção (raro)
                     duracao = (seg_fim - seg_inicio).total_seconds() / 60
                     novo_setup_inicio = current_end
                     novo_setup_fim = current_end + timedelta(minutes=duracao)
@@ -511,7 +668,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
                     
                     current_end = novo_setup_fim
             else:
-                # É uma produção
                 novo_seg_inicio = current_end
                 novo_seg_fim = calcular_fim_op(novo_seg_inicio, seg_qtd)
                 
@@ -564,52 +720,29 @@ df_produtos = st.session_state.df_produtos
 
 
 # =================================================================
-# CABEÇALHO
+# CABEÇALHO - CORRIGIDO
 # =================================================================
-
+# 👇 VISUAL: Header com classes CSS personalizadas
 st.markdown(f"""
-<div style="background-color: #1E1E1E;
-padding: 8px 15px;
-border-radius: 8px;
-border-left: 8px solid #FF4B4B;
-margin-bottom: 15px;
-display:flex;
-justify-content:space-between;
-align-items:center">
-<div>
-<h2 style="color:white;margin:0;font-size:20px">
-📊 PCP <span style="color:#FF4B4B">|</span> CRONOGRAMA DE MÁQUINAS
-</h2>
-<p style="color:#888;margin:2px 0 0 0;font-size:12px">
-👤 Usuário: {st.session_state.user_email}
-</p>
-</div>
-<div style="text-align:center;
-border:1px solid #FF4B4B;
-padding:2px 15px;
-border-radius:5px;
-background-color:#0E1117;
-min-width:130px">
-<h3 style="color:#FF4B4B;
-margin:0;
-font-family:Courier New;
-font-size:22px">
-⏰ {agora.strftime('%H:%M:%S')}
-</h3>
-<p style="color:#aaa;
-margin:-2px 0 2px 0;
-font-size:12px;
-border-top:1px dashed #FF4B4B;
-padding-top:2px">
-{agora.strftime('%d/%m/%Y')}
-</p>
-</div>
+<div class="custom-header">
+    <div>
+        <h2 style="color:white;margin:0;font-size:20px">
+            📊 PCP <span style="color:#FF4B4B">|</span> CRONOGRAMA DE MÁQUINAS
+        </h2>
+        <p style="color:#888;margin:2px 0 0 0;font-size:12px">
+            👤 Usuário: {st.session_state.user_email}
+        </p>
+    </div>
+    <div class="clock-box">
+        <h3 class="clock-time">⏰ {agora.strftime('%H:%M:%S')}</h3>
+        <p class="clock-date">{agora.strftime('%d/%m/%Y')}</p>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 
 # =================================================================
-# FUNÇÃO PARA RENDERIZAR SETOR
+# FUNÇÃO PARA RENDERIZAR SETOR - CORRIGIDA (VISUAL)
 # =================================================================
 
 def renderizar_setor(lista_maquinas, altura=500):
@@ -625,7 +758,11 @@ def renderizar_setor(lista_maquinas, altura=500):
         st.info("Sem dados para este setor.")
         return
     
-    # Criar Gantt
+    # 👇 VISUAL: Título do setor
+    setor_nome = "SERIGRAFIA" if "maquina" in lista_maquinas[0] else "SOPRO"
+    st.markdown(f"### 🏭 Setor {setor_nome}")
+    
+    # 👇 VISUAL: Criar Gantt com visual melhorado
     fig = px.timeline(
         df_g,
         x_start="inicio",
@@ -635,12 +772,12 @@ def renderizar_setor(lista_maquinas, altura=500):
         text="rotulo_barra",
         category_orders={"maquina": lista_maquinas},
         color_discrete_map={
-            "Pendente": "#3498db",
-            "Concluído": "#2ecc71",
-            "Setup": "#7f7f7f",  # Cinza para setup
-            "Executando": "#ff7f0e",  # Laranja para em execução
-            "Atrasada": "#FF4B4B",  # Vermelho para atrasada
-            "Manutenção": "#9b59b6"
+            "Pendente": "#3498db",      # Azul
+            "Concluído": "#2ecc71",      # Verde
+            "Setup": "#7f7f7f",           # Cinza
+            "Executando": "#ff7f0e",      # Laranja
+            "Atrasada": "#FF4B4B",        # Vermelho
+            "Manutenção": "#9b59b6"       # Roxo
         },
         custom_data=[
             "pedido",
@@ -649,92 +786,121 @@ def renderizar_setor(lista_maquinas, altura=500):
             "ini_formatado",
             "fim_formatado",
             "status"
-        ]
+        ],
+        height=altura
     )
     
+    # 👇 VISUAL: Configuração das barras (mais grossas)
     fig.update_traces(
         hovertemplate="<br>".join([
-            "<b>📦 OP: %{customdata[0]}</b>",
+            "<b style='font-size:14px'>📦 OP: %{customdata[0]}</b>",
             "🔧 <b>Item:</b> %{customdata[1]}",
             "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
-            "⏱️ <b>Início programado:</b> %{customdata[3]}",
-            "⏱️ <b>Término programado:</b> %{customdata[4]}",
+            "⏱️ <b>Início:</b> %{customdata[3]}",
+            "⏱️ <b>Término:</b> %{customdata[4]}",
             "⚙️ <b>Status:</b> %{customdata[5]}",
-            "⚙️ <b>Cadência:</b> 2380 unid/hora",
+            "⚙️ <b>Cadência:</b> 2.380 unid/hora",
             "<extra></extra>"
         ]),
         textposition='inside',
         insidetextanchor='start',
-        width=0.92
+        width=0.95,  # 👈 Barras mais grossas
+        marker=dict(line=dict(width=2, color='#333333')),  # 👈 Borda nas barras
+        opacity=0.9,
+        selector=dict(type='bar')
     )
     
+    # 👇 VISUAL: Eixo Y
     fig.update_yaxes(
         autorange="reversed",
         title="",
         showgrid=True,
-        gridcolor='rgba(255,255,255,0.15)',
-        zeroline=False
+        gridcolor='rgba(255,255,255,0.1)',  # 👈 Grid mais suave
+        zeroline=False,
+        tickfont=dict(size=12, color='#cccccc'),
+        tickangle=0
     )
     
+    # 👇 VISUAL: Eixo X com range otimizado
     fig.update_xaxes(
         type='date',
         range=[
             agora - timedelta(hours=2),
             agora + timedelta(hours=36)
         ],
-        dtick=10800000,
+        dtick=10800000,  # 3 horas em milissegundos
         tickformat="%H:%M\n%d/%m",
         gridcolor='rgba(255,255,255,0.1)',
         showgrid=True,
         tickangle=0,
-        tickfont=dict(size=11)
+        tickfont=dict(size=11, color='#cccccc'),
+        title=""
     )
     
-    # Linha vertical para o momento atual
+    # 👇 VISUAL: Linha vertical do tempo atual (mais destacada)
     fig.add_vline(
         x=agora.timestamp() * 1000,
-        line_width=2,
+        line_width=3,
         line_dash="dash",
-        line_color="white",
-        opacity=0.5
+        line_color="#FF4B4B",
+        opacity=0.8,
+        annotation_text="AGORA",
+        annotation_position="top",
+        annotation_font_size=12,
+        annotation_font_color="#FF4B4B"
     )
     
-    st.plotly_chart(fig, use_container_width=True, height=altura)
+    # 👇 VISUAL: Layout geral do gráfico
+    fig.update_layout(
+        plot_bgcolor='#0E1117',
+        paper_bgcolor='#0E1117',
+        font=dict(color='#ffffff'),
+        margin=dict(l=50, r=20, t=40, b=40),  # 👈 Margens ajustadas
+        legend=dict(
+            bgcolor='#1E1E1E',
+            bordercolor='#333333',
+            font=dict(color='#ffffff')
+        ),
+        hoverlabel=dict(
+            bgcolor='#1E1E1E',
+            font_size=13,
+            font_family='Arial',
+            font_color='white'
+        )
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})  # 👈 Esconder toolbar
     
     # OPs atrasadas
     ops_atrasadas = df_g[df_g["atrasada"]]
     
     if not ops_atrasadas.empty:
         st.markdown("#### 🚨 OPs ATRASADAS")
-        for i in range(0, len(ops_atrasadas), 3):
-            cols = st.columns(3)
-            for j in range(3):
-                if i + j < len(ops_atrasadas):
-                    op = ops_atrasadas.iloc[i + j]
-                    descricao_produto = get_descricao_produto(op['item'])
-                    with cols[j]:
-                        st.markdown(f"""
-                        <div style="background-color:#FF4B4B20;
-                        padding:15px;
-                        border-radius:10px;
-                        border-left:5px solid #FF4B4B">
-                        <p style="color:#FF4B4B;font-weight:bold">
+        cols = st.columns(min(3, len(ops_atrasadas)))
+        for i, (idx, op) in enumerate(ops_atrasadas.iterrows()):
+            if i >= 3: break
+            descricao_produto = get_descricao_produto(op['item'])
+            with cols[i % 3]:
+                # 👇 VISUAL: Card com classe CSS
+                st.markdown(f"""
+                <div class="status-card-atrasada">
+                    <p style="color:#FF4B4B;font-weight:bold;margin:0 0 10px 0">
                         🏭 {op['maquina']}
-                        </p>
-                        <p style="color:white;margin:0">
-                        Item: {op['item']}
-                        </p>
-                        <p style="color:white;margin:0">
-                        Descrição: {descricao_produto}
-                        </p>
-                        <p style="color:white;margin:0">
-                        QTD: {int(op['qtd'])}
-                        </p>
-                        <p style="color:#aaa;margin-top:5px">
-                        Deveria terminar: {op['fim'].strftime('%d/%m %H:%M')}
-                        </p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    </p>
+                    <p style="color:white;margin:5px 0">
+                        <b>Item:</b> {op['item']}
+                    </p>
+                    <p style="color:white;margin:5px 0">
+                        <b>Descrição:</b> {descricao_produto[:50]}...
+                    </p>
+                    <p style="color:white;margin:5px 0">
+                        <b>QTD:</b> {int(op['qtd']):,}
+                    </p>
+                    <p style="color:#aaa;margin:10px 0 0 0;font-size:12px">
+                        ⏱️ Deveria terminar: {op['fim'].strftime('%d/%m %H:%M')}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
         st.divider()
     
     # OPs em execução
@@ -742,35 +908,31 @@ def renderizar_setor(lista_maquinas, altura=500):
     
     if not ops_execucao.empty:
         st.markdown("#### ⚙️ OPs EM EXECUÇÃO")
-        for i in range(0, len(ops_execucao), 3):
-            cols = st.columns(3)
-            for j in range(3):
-                if i + j < len(ops_execucao):
-                    op = ops_execucao.iloc[i + j]
-                    descricao_produto = get_descricao_produto(op['item'])
-                    with cols[j]:
-                        st.markdown(f"""
-                        <div style="background-color:#ff7f0e20;
-                        padding:15px;
-                        border-radius:10px;
-                        border-left:5px solid #ff7f0e">
-                        <p style="color:#ff7f0e;font-weight:bold">
+        cols = st.columns(min(3, len(ops_execucao)))
+        for i, (idx, op) in enumerate(ops_execucao.iterrows()):
+            if i >= 3: break
+            descricao_produto = get_descricao_produto(op['item'])
+            with cols[i % 3]:
+                # 👇 VISUAL: Card com classe CSS
+                st.markdown(f"""
+                <div class="status-card-execucao">
+                    <p style="color:#ff7f0e;font-weight:bold;margin:0 0 10px 0">
                         🏭 {op['maquina']}
-                        </p>
-                        <p style="color:white;margin:0">
-                        Item: {op['item']}
-                        </p>
-                        <p style="color:white;margin:0">
-                        Descrição: {descricao_produto}
-                        </p>
-                        <p style="color:white;margin:0">
-                        QTD: {int(op['qtd'])}
-                        </p>
-                        <p style="color:#aaa;margin-top:5px">
-                        Término previsto: {op['fim'].strftime('%d/%m %H:%M')}
-                        </p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    </p>
+                    <p style="color:white;margin:5px 0">
+                        <b>Item:</b> {op['item']}
+                    </p>
+                    <p style="color:white;margin:5px 0">
+                        <b>Descrição:</b> {descricao_produto[:50]}...
+                    </p>
+                    <p style="color:white;margin:5px 0">
+                        <b>QTD:</b> {int(op['qtd']):,}
+                    </p>
+                    <p style="color:#aaa;margin:10px 0 0 0;font-size:12px">
+                        ⏱️ Término previsto: {op['fim'].strftime('%d/%m %H:%M')}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
         st.divider()
     
     # Máquinas sem programação
@@ -781,26 +943,20 @@ def renderizar_setor(lista_maquinas, altura=500):
     
     if maquinas_sem_programacao:
         st.markdown("#### 💤 Máquinas sem Programação")
-        for i in range(0, len(maquinas_sem_programacao), 4):
-            cols = st.columns(4)
-            for j in range(4):
-                if i + j < len(maquinas_sem_programacao):
-                    with cols[j]:
-                        maq = maquinas_sem_programacao[i + j]
-                        st.markdown(f"""
-                        <div style="background-color:#7f7f7f20;
-                        padding:10px;
-                        border-radius:10px;
-                        border-left:5px solid #7f7f7f;
-                        text-align:center">
-                        <p style="color:#7f7f7f;font-weight:bold">
+        cols = st.columns(4)
+        for i, maq in enumerate(maquinas_sem_programacao[:4]):  # Mostrar apenas 4
+            with cols[i]:
+                # 👇 VISUAL: Card com classe CSS
+                st.markdown(f"""
+                <div class="status-card-semop">
+                    <p style="color:#7f7f7f;font-weight:bold;margin:0">
                         🏭 {maq}
-                        </p>
-                        <p style="color:#aaa">
+                    </p>
+                    <p style="color:#aaa;margin:5px 0 0 0">
                         Sem OP
-                        </p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
         st.divider()
     
     # Métricas
@@ -812,15 +968,18 @@ def renderizar_setor(lista_maquinas, altura=500):
     total_setor = len(lista_maquinas)
     total_ops = df_g[df_g["status"] == "Pendente"].shape[0]
     
-    c1.metric("🚨 OPs Atrasadas", atrasadas_count)
-    c2.metric("⚙️ OPs em Execução", em_uso_count)
-    c3.metric("📦 Total OPs Pendentes", total_ops)
-    
-    if total_setor > 0:
-        ocup = (em_uso_count / total_setor) * 100
-        c4.metric("📈 Taxa de Ocupação", f"{ocup:.1f}%")
-    else:
-        c4.metric("📈 Taxa de Ocupação", "0%")
+    with c1:
+        st.metric("🚨 OPs Atrasadas", atrasadas_count, delta=None)
+    with c2:
+        st.metric("⚙️ OPs em Execução", em_uso_count)
+    with c3:
+        st.metric("📦 Total OPs Pendentes", total_ops)
+    with c4:
+        if total_setor > 0:
+            ocup = (em_uso_count / total_setor) * 100
+            st.metric("📈 Taxa de Ocupação", f"{ocup:.1f}%")
+        else:
+            st.metric("📈 Taxa de Ocupação", "0%")
     
     st.divider()
 
@@ -967,7 +1126,6 @@ with tab4:
     df_ger = carregar_dados()
     
     if not df_ger.empty:
-        # Mostrar apenas OPs pendentes e setups
         df_programadas = df_ger[
             df_ger["status"].isin(["Pendente", "Setup"])
         ].sort_values(["maquina", "inicio"])
@@ -975,13 +1133,11 @@ with tab4:
         if df_programadas.empty:
             st.info("Nenhuma OP pendente encontrada")
         else:
-            # Agrupar por máquina
             for maquina in sorted(df_programadas["maquina"].unique()):
                 with st.expander(f"🏭 {maquina}", expanded=False):
                     df_maq = df_programadas[df_programadas["maquina"] == maquina]
                     
                     for _, prod in df_maq.iterrows():
-                        # Pular setups na exibição principal (serão mostrados junto com a OP)
                         if prod["status"] == "Setup" and prod["vinculo_id"]:
                             continue
                             
@@ -1018,13 +1174,11 @@ with tab4:
                         
                         with col5:
                             if prod["status"] == "Pendente":
-                                # Botão de finalizar
                                 if st.button("✅ Finalizar", key=f"fin_{prod['id']}"):
                                     finalizar_op(prod["id"])
                                     st.success("OP finalizada!")
                                     st.rerun()
                                 
-                                # Botão de reprogramar
                                 with st.popover("📅 Reprogramar"):
                                     st.markdown(f"**Reprogramar {prod['pedido']}**")
                                     
@@ -1046,7 +1200,6 @@ with tab4:
                                         st.success("OP reprogramada! OPs seguintes ajustadas.")
                                         st.rerun()
                             
-                            # Botão de deletar (para todos)
                             if st.button("🗑️ Deletar", key=f"del_{prod['id']}"):
                                 deletar_op(prod["id"])
                                 st.success("OP e setup deletados!")
@@ -1095,7 +1248,6 @@ with tab6:
                 f"{total_cargas:.1f}"
             )
             
-            # Tabela por máquina
             st.subheader("Distribuição por Máquina")
             for maquina in MAQUINAS_SOPRO:
                 df_maq = df_sopro[df_sopro["maquina"] == maquina]
@@ -1114,10 +1266,11 @@ with tab6:
 
 
 # =================================================================
-# RODAPÉ
+# RODAPÉ - CORRIGIDO
 # =================================================================
-
-st.divider()
-st.caption(
-    "v7.3 | Industrial By William | PCP Serigrafia + Sopro | Setup automático 30min | Reprogramação em cascata"
-)
+# 👇 VISUAL: Rodapé com estilo
+st.markdown("""
+<div class="footer">
+    v7.3 | Industrial By William | PCP Serigrafia + Sopro | Setup automático 30min | Reprogramação em cascata
+</div>
+""", unsafe_allow_html=True)

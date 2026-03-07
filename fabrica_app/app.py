@@ -111,6 +111,7 @@ TODAS_MAQUINAS = MAQUINAS_SERIGRAFIA + MAQUINAS_SOPRO
 
 CADENCIA_PADRAO = 2380
 CARGA_UNIDADE = 49504
+SETUP_DURACAO = 30  # minutos
 
 fuso_br = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(fuso_br).replace(tzinfo=None)
@@ -181,18 +182,39 @@ def carregar_produtos_google():
 
 def carregar_dados():
     conn = conectar()
-    df = pd.read_sql_query("SELECT * FROM agenda", conn)
+    df = pd.read_sql_query("SELECT * FROM agenda ORDER BY inicio", conn)
     conn.close()
     
     if not df.empty:
         df["inicio"] = pd.to_datetime(df["inicio"])
         df["fim"] = pd.to_datetime(df["fim"])
         df["qtd"] = pd.to_numeric(df["qtd"], errors='coerce').fillna(0)
+        
+        # Rótulo para as barras
         df["rotulo_barra"] = df.apply(
             lambda r: "🔧 SETUP" if r['status'] == "Setup"
             else f"📦 {r['pedido']}<br>QTD: {int(r['qtd'])}",
             axis=1
         )
+        
+        # Identificar OPs em execução
+        df["em_execucao"] = (df["inicio"] <= agora) & (df["fim"] >= agora) & (df["status"] == "Pendente")
+        
+        # Identificar OPs atrasadas
+        df["atrasada"] = (df["fim"] < agora) & (df["status"] == "Pendente")
+        
+        # Cor da barra baseada no status
+        df["cor_barra"] = "Pendente"
+        df.loc[df["status"] == "Setup", "cor_barra"] = "Setup"
+        df.loc[df["status"] == "Manutenção", "cor_barra"] = "Manutenção"
+        df.loc[df["status"] == "Concluído", "cor_barra"] = "Concluído"
+        df.loc[df["em_execucao"], "cor_barra"] = "Executando"
+        df.loc[df["atrasada"], "cor_barra"] = "Atrasada"
+        
+        # Formatar datas para hover
+        df["fim_formatado"] = df["fim"].dt.strftime('%d/%m %H:%M')
+        df["ini_formatado"] = df["inicio"].dt.strftime('%d/%m %H:%M')
+        
     return df
 
 
@@ -214,7 +236,15 @@ def proximo_horario(maq):
 
 
 # =================================================================
-# INSERIR PRODUÇÃO - CORRIGIDO
+# CALCULAR FIM DA OP
+# =================================================================
+
+def calcular_fim_op(inicio, qtd):
+    return inicio + timedelta(hours=qtd / CADENCIA_PADRAO)
+
+
+# =================================================================
+# INSERIR PRODUÇÃO
 # =================================================================
 
 def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
@@ -222,56 +252,53 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
     cur = conn.cursor()
     
     try:
-        # Verificar quais colunas existem
-        cur.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'agenda'
-        """)
-        colunas_existentes = [row[0] for row in cur.fetchall()]
-        
-        # Construir query baseada nas colunas existentes
-        if 'criado_por' in colunas_existentes and 'criado_em' in colunas_existentes:
-            cur.execute(
-                """
-                INSERT INTO agenda
-                (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                RETURNING id
-                """,
-                (
-                    maquina,
-                    pedido,
-                    item,
-                    inicio,
-                    fim,
-                    "Pendente",
-                    qtd,
-                    usuario,
-                    agora
-                )
+        # Inserir a produção
+        cur.execute(
+            """
+            INSERT INTO agenda
+            (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+            """,
+            (
+                maquina,
+                pedido,
+                item,
+                inicio,
+                fim,
+                "Pendente",
+                qtd,
+                usuario,
+                agora
             )
-        else:
-            # Versão sem os campos de auditoria
-            cur.execute(
-                """
-                INSERT INTO agenda
-                (maquina, pedido, item, inicio, fim, status, qtd)
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
-                RETURNING id
-                """,
-                (
-                    maquina,
-                    pedido,
-                    item,
-                    inicio,
-                    fim,
-                    "Pendente",
-                    qtd
-                )
-            )
+        )
         
         producao_id = cur.fetchone()[0]
+        
+        # Inserir setup de 30 minutos antes
+        setup_inicio = inicio - timedelta(minutes=SETUP_DURACAO)
+        setup_fim = inicio
+        
+        cur.execute(
+            """
+            INSERT INTO agenda
+            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                maquina,
+                f"SETUP - {pedido}",
+                "Setup",
+                setup_inicio,
+                setup_fim,
+                "Setup",
+                0,
+                producao_id,
+                usuario,
+                agora
+            )
+        )
+        
         conn.commit()
         return producao_id
         
@@ -285,7 +312,7 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
 
 
 # =================================================================
-# INSERIR SETUP - CORRIGIDO
+# INSERIR SETUP MANUAL
 # =================================================================
 
 def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
@@ -293,52 +320,25 @@ def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
     cur = conn.cursor()
     
     try:
-        # Verificar quais colunas existem
-        cur.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'agenda'
-        """)
-        colunas_existentes = [row[0] for row in cur.fetchall()]
-        
-        if 'criado_por' in colunas_existentes and 'criado_em' in colunas_existentes:
-            cur.execute(
-                """
-                INSERT INTO agenda
-                (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    maquina,
-                    pedido,
-                    "Ajuste",
-                    inicio,
-                    fim,
-                    "Setup",
-                    0,
-                    vinculo,
-                    usuario,
-                    agora
-                )
+        cur.execute(
+            """
+            INSERT INTO agenda
+            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                maquina,
+                pedido,
+                "Ajuste",
+                inicio,
+                fim,
+                "Setup",
+                0,
+                vinculo,
+                usuario,
+                agora
             )
-        else:
-            cur.execute(
-                """
-                INSERT INTO agenda
-                (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    maquina,
-                    pedido,
-                    "Ajuste",
-                    inicio,
-                    fim,
-                    "Setup",
-                    0,
-                    vinculo
-                )
-            )
+        )
         
         conn.commit()
         
@@ -367,70 +367,160 @@ def finalizar_op(id_op):
 
 
 # =================================================================
-# DELETAR OP
+# DELETAR OP (E SEU SETUP)
 # =================================================================
 
 def deletar_op(id_op):
     conn = conectar()
     cur = conn.cursor()
+    
+    # Deletar a OP e seu setup vinculado
     cur.execute(
         "DELETE FROM agenda WHERE id=%s OR vinculo_id=%s",
-        (id_op,id_op)
+        (id_op, id_op)
     )
+    
     conn.commit()
     cur.close()
     conn.close()
 
 
 # =================================================================
-# REPROGRAMAR OP - CORRIGIDO
+# REPROGRAMAR OP (E EMPURRAR AS SEGUINTES)
 # =================================================================
 
-def reprogramar_op(id_op, novo_inicio, novo_fim, usuario):
+def reprogramar_op(id_op, novo_inicio, usuario):
     conn = conectar()
     cur = conn.cursor()
     
     try:
-        # Verificar quais colunas existem
+        # Buscar a OP atual e seu setup
         cur.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'agenda'
-        """)
-        colunas_existentes = [row[0] for row in cur.fetchall()]
+            SELECT id, maquina, inicio, fim, vinculo_id, status, qtd 
+            FROM agenda 
+            WHERE id = %s OR vinculo_id = %s
+            ORDER BY inicio
+        """, (id_op, id_op))
         
-        if 'alterado_por' in colunas_existentes and 'alterado_em' in colunas_existentes:
+        registros = cur.fetchall()
+        
+        if not registros:
+            return
+        
+        # Separar setup e produção
+        setup = None
+        producao = None
+        
+        for reg in registros:
+            if reg[5] == "Setup":  # status
+                setup = reg
+            else:
+                producao = reg
+        
+        if not producao:
+            return
+        
+        # Calcular novos horários
+        producao_id, maquina, old_inicio, old_fim, vinculo_id, status, qtd = producao
+        
+        # Novo fim baseado na quantidade
+        novo_fim = calcular_fim_op(novo_inicio, qtd)
+        
+        # Atualizar a produção
+        cur.execute(
+            """
+            UPDATE agenda 
+            SET inicio = %s, fim = %s, alterado_por = %s, alterado_em = %s
+            WHERE id = %s
+            """,
+            (novo_inicio, novo_fim, usuario, agora, producao_id)
+        )
+        
+        # Se tiver setup, atualizar também
+        if setup:
+            setup_id, _, setup_inicio, setup_fim, _, _, _ = setup
+            novo_setup_inicio = novo_inicio - timedelta(minutes=SETUP_DURACAO)
+            novo_setup_fim = novo_inicio
+            
             cur.execute(
                 """
-                UPDATE agenda
-                SET inicio=%s,
-                    fim=%s,
-                    alterado_por=%s,
-                    alterado_em=%s
-                WHERE id=%s
+                UPDATE agenda 
+                SET inicio = %s, fim = %s, alterado_por = %s, alterado_em = %s
+                WHERE id = %s
                 """,
-                (
-                    novo_inicio,
-                    novo_fim,
-                    usuario,
-                    agora,
-                    id_op
-                )
+                (novo_setup_inicio, novo_setup_fim, usuario, agora, setup_id)
             )
-        else:
-            cur.execute(
-                """
-                UPDATE agenda
-                SET inicio=%s,
-                    fim=%s
-                WHERE id=%s
-                """,
-                (
-                    novo_inicio,
-                    novo_fim,
-                    id_op
+        
+        # Buscar todas as OPs seguintes na mesma máquina
+        cur.execute("""
+            SELECT id, inicio, fim, vinculo_id, status, qtd
+            FROM agenda
+            WHERE maquina = %s 
+                AND status IN ('Pendente', 'Setup')
+                AND id != %s 
+                AND (vinculo_id != %s OR vinculo_id IS NULL)
+                AND inicio > %s
+            ORDER BY inicio
+        """, (maquina, producao_id, producao_id, old_fim))
+        
+        seguintes = cur.fetchall()
+        
+        # Recalcular horários das OPs seguintes
+        current_end = novo_fim
+        
+        for seguinte in seguintes:
+            seg_id, seg_inicio, seg_fim, seg_vinculo, seg_status, seg_qtd = seguinte
+            
+            # Calcular novo início (após a OP anterior)
+            if seg_status == "Setup":
+                # Setup deve começar antes da produção
+                # Encontrar a produção vinculada
+                cur.execute("SELECT id, inicio FROM agenda WHERE vinculo_id = %s AND status = 'Pendente'", (seg_vinculo or seg_id,))
+                prod_vinculada = cur.fetchone()
+                
+                if prod_vinculada:
+                    prod_id, prod_inicio = prod_vinculada
+                    novo_setup_inicio = current_end
+                    novo_setup_fim = current_end + timedelta(minutes=SETUP_DURACAO)
+                    
+                    cur.execute(
+                        "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                        (novo_setup_inicio, novo_setup_fim, seg_id)
+                    )
+                    
+                    # Atualizar produção vinculada
+                    novo_prod_inicio = novo_setup_fim
+                    novo_prod_fim = calcular_fim_op(novo_prod_inicio, seg_qtd if seg_qtd > 0 else qtd)
+                    
+                    cur.execute(
+                        "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                        (novo_prod_inicio, novo_prod_fim, prod_id)
+                    )
+                    
+                    current_end = novo_prod_fim
+                else:
+                    # Setup sem produção (raro)
+                    duracao = (seg_fim - seg_inicio).total_seconds() / 60
+                    novo_setup_inicio = current_end
+                    novo_setup_fim = current_end + timedelta(minutes=duracao)
+                    
+                    cur.execute(
+                        "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                        (novo_setup_inicio, novo_setup_fim, seg_id)
+                    )
+                    
+                    current_end = novo_setup_fim
+            else:
+                # É uma produção
+                novo_seg_inicio = current_end
+                novo_seg_fim = calcular_fim_op(novo_seg_inicio, seg_qtd)
+                
+                cur.execute(
+                    "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                    (novo_seg_inicio, novo_seg_fim, seg_id)
                 )
-            )
+                
+                current_end = novo_seg_fim
         
         conn.commit()
         
@@ -535,35 +625,6 @@ def renderizar_setor(lista_maquinas, altura=500):
         st.info("Sem dados para este setor.")
         return
     
-    # Status dinâmico
-    df_g["status_cor"] = df_g["status"]
-    df_g.loc[
-        (df_g["inicio"] <= agora) &
-        (df_g["fim"] >= agora) &
-        (df_g["status"] == "Pendente"),
-        "status_cor"
-    ] = "Executando"
-    
-    df_g["cor_barra"] = df_g["status_cor"]
-    df_g.loc[
-        (df_g["fim"] < agora) &
-        (df_g["status"] == "Pendente"),
-        "cor_barra"
-    ] = "Atrasada"
-    df_g.loc[df_g["status"] == "Setup", "cor_barra"] = "Setup"
-    df_g.loc[df_g["status"] == "Manutenção", "cor_barra"] = "Manutenção"
-    
-    # Formatando datas
-    df_g["fim_formatado"] = df_g["fim"].dt.strftime('%d/%m %H:%M')
-    df_g["ini_formatado"] = df_g["inicio"].dt.strftime('%d/%m %H:%M')
-    
-    # OPs em execução
-    ops_em_execucao = df_g[
-        (df_g["inicio"] <= agora) &
-        (df_g["fim"] >= agora) &
-        (df_g["status"] == "Pendente")
-    ]
-    
     # Criar Gantt
     fig = px.timeline(
         df_g,
@@ -576,9 +637,9 @@ def renderizar_setor(lista_maquinas, altura=500):
         color_discrete_map={
             "Pendente": "#3498db",
             "Concluído": "#2ecc71",
-            "Setup": "#7f7f7f",
-            "Executando": "#ff7f0e",
-            "Atrasada": "#FF4B4B",
+            "Setup": "#7f7f7f",  # Cinza para setup
+            "Executando": "#ff7f0e",  # Laranja para em execução
+            "Atrasada": "#FF4B4B",  # Vermelho para atrasada
             "Manutenção": "#9b59b6"
         },
         custom_data=[
@@ -586,7 +647,8 @@ def renderizar_setor(lista_maquinas, altura=500):
             "item",
             "qtd",
             "ini_formatado",
-            "fim_formatado"
+            "fim_formatado",
+            "status"
         ]
     )
     
@@ -597,6 +659,7 @@ def renderizar_setor(lista_maquinas, altura=500):
             "📊 <b>Quantidade:</b> %{customdata[2]:,.0f} unidades",
             "⏱️ <b>Início programado:</b> %{customdata[3]}",
             "⏱️ <b>Término programado:</b> %{customdata[4]}",
+            "⚙️ <b>Status:</b> %{customdata[5]}",
             "⚙️ <b>Cadência:</b> 2380 unid/hora",
             "<extra></extra>"
         ]),
@@ -627,13 +690,19 @@ def renderizar_setor(lista_maquinas, altura=500):
         tickfont=dict(size=11)
     )
     
+    # Linha vertical para o momento atual
+    fig.add_vline(
+        x=agora.timestamp() * 1000,
+        line_width=2,
+        line_dash="dash",
+        line_color="white",
+        opacity=0.5
+    )
+    
     st.plotly_chart(fig, use_container_width=True, height=altura)
     
     # OPs atrasadas
-    ops_atrasadas = df_g[
-        (df_g["fim"] < agora) &
-        (df_g["status"] == "Pendente")
-    ]
+    ops_atrasadas = df_g[df_g["atrasada"]]
     
     if not ops_atrasadas.empty:
         st.markdown("#### 🚨 OPs ATRASADAS")
@@ -663,6 +732,42 @@ def renderizar_setor(lista_maquinas, altura=500):
                         </p>
                         <p style="color:#aaa;margin-top:5px">
                         Deveria terminar: {op['fim'].strftime('%d/%m %H:%M')}
+                        </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+        st.divider()
+    
+    # OPs em execução
+    ops_execucao = df_g[df_g["em_execucao"]]
+    
+    if not ops_execucao.empty:
+        st.markdown("#### ⚙️ OPs EM EXECUÇÃO")
+        for i in range(0, len(ops_execucao), 3):
+            cols = st.columns(3)
+            for j in range(3):
+                if i + j < len(ops_execucao):
+                    op = ops_execucao.iloc[i + j]
+                    descricao_produto = get_descricao_produto(op['item'])
+                    with cols[j]:
+                        st.markdown(f"""
+                        <div style="background-color:#ff7f0e20;
+                        padding:15px;
+                        border-radius:10px;
+                        border-left:5px solid #ff7f0e">
+                        <p style="color:#ff7f0e;font-weight:bold">
+                        🏭 {op['maquina']}
+                        </p>
+                        <p style="color:white;margin:0">
+                        Item: {op['item']}
+                        </p>
+                        <p style="color:white;margin:0">
+                        Descrição: {descricao_produto}
+                        </p>
+                        <p style="color:white;margin:0">
+                        QTD: {int(op['qtd'])}
+                        </p>
+                        <p style="color:#aaa;margin-top:5px">
+                        Término previsto: {op['fim'].strftime('%d/%m %H:%M')}
                         </p>
                         </div>
                         """, unsafe_allow_html=True)
@@ -703,7 +808,7 @@ def renderizar_setor(lista_maquinas, altura=500):
     c1, c2, c3, c4 = st.columns(4)
     
     atrasadas_count = len(ops_atrasadas)
-    em_uso_count = ops_em_execucao["maquina"].nunique() if not ops_em_execucao.empty else 0
+    em_uso_count = ops_execucao["maquina"].nunique() if not ops_execucao.empty else 0
     total_setor = len(lista_maquinas)
     total_ops = df_g[df_g["status"] == "Pendente"].shape[0]
     
@@ -766,13 +871,15 @@ with tab3:
         with c1:
             maq_sel = st.selectbox(
                 "🏭 Máquina destino",
-                TODAS_MAQUINAS
+                TODAS_MAQUINAS,
+                key="nova_maquina"
             )
             
             opcoes_itens = df_prod['id_item'].tolist()
             item_sel = st.selectbox(
                 "📌 Selecione o ID_ITEM",
-                opcoes_itens
+                opcoes_itens,
+                key="novo_item"
             )
             
             descricao_texto = "N/A"
@@ -790,21 +897,24 @@ with tab3:
             st.text_input(
                 "📝 Descrição",
                 value=descricao_texto,
-                disabled=True
+                disabled=True,
+                key="nova_descricao"
             )
         
         with c2:
-            op_num = st.text_input("🔢 Número da OP")
+            op_num = st.text_input("🔢 Número da OP", key="nova_op")
             
             st.text_input(
                 "👥 Cliente",
                 value=cliente_texto,
-                disabled=True
+                disabled=True,
+                key="nova_cliente"
             )
             
             qtd_lanc = st.number_input(
                 "📊 Quantidade Total",
-                value=carga_sugerida
+                value=int(carga_sugerida),
+                key="nova_qtd"
             )
         
         sugestao_h = proximo_horario(maq_sel)
@@ -813,20 +923,20 @@ with tab3:
         
         data_ini = d1.date_input(
             "📅 Data",
-            sugestao_h.date()
+            sugestao_h.date(),
+            key="nova_data"
         )
         
         hora_ini = d2.time_input(
             "⏰ Hora",
-            sugestao_h.time()
+            sugestao_h.time(),
+            key="nova_hora"
         )
         
-        if st.button("🚀 CONFIRMAR E AGENDAR"):
+        if st.button("🚀 CONFIRMAR E AGENDAR (com setup automático de 30min)", key="btn_confirmar"):
             if op_num and item_sel:
                 inicio_dt = datetime.combine(data_ini, hora_ini)
-                fim_dt = inicio_dt + timedelta(
-                    hours=qtd_lanc / CADENCIA_PADRAO
-                )
+                fim_dt = calcular_fim_op(inicio_dt, qtd_lanc)
                 
                 resultado = inserir_producao(
                     maq_sel,
@@ -839,51 +949,110 @@ with tab3:
                 )
                 
                 if resultado:
-                    st.success("OP lançada com sucesso!")
+                    st.success("✅ OP lançada com sucesso! Setup de 30 minutos agendado automaticamente.")
+                    st.balloons()
                     st.rerun()
             else:
                 st.error("Preencha OP e Item")
 
 
 # =================================================================
-# ABA 4 - GERENCIAR OPs
+# ABA 4 - GERENCIAR OPs (COM EDIÇÃO E REPROGRAMAÇÃO)
 # =================================================================
 
 with tab4:
     st.subheader("⚙️ Gerenciamento de OPs")
+    st.markdown("Aqui você pode finalizar, deletar ou reprogramar OPs. Ao reprogramar, todas as OPs seguintes são ajustadas automaticamente.")
     
     df_ger = carregar_dados()
     
     if not df_ger.empty:
+        # Mostrar apenas OPs pendentes e setups
         df_programadas = df_ger[
-            df_ger["status"].isin(["Pendente","Setup","Manutenção"])
-        ]
+            df_ger["status"].isin(["Pendente", "Setup"])
+        ].sort_values(["maquina", "inicio"])
         
-        for _, prod in df_programadas.iterrows():
-            with st.expander(
-                f"{prod['maquina']} | {prod['pedido']}"
-            ):
-                st.write("Item:", prod["item"])
-                st.write("Início:", prod["inicio"])
-                st.write("Fim:", prod["fim"])
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.button(
-                        "✅ Finalizar",
-                        key=f"ok_{prod['id']}"
-                    ):
-                        finalizar_op(prod["id"])
-                        st.rerun()
-                
-                with col2:
-                    if st.button(
-                        "🗑️ Deletar",
-                        key=f"del_{prod['id']}"
-                    ):
-                        deletar_op(prod["id"])
-                        st.rerun()
+        if df_programadas.empty:
+            st.info("Nenhuma OP pendente encontrada")
+        else:
+            # Agrupar por máquina
+            for maquina in sorted(df_programadas["maquina"].unique()):
+                with st.expander(f"🏭 {maquina}", expanded=False):
+                    df_maq = df_programadas[df_programadas["maquina"] == maquina]
+                    
+                    for _, prod in df_maq.iterrows():
+                        # Pular setups na exibição principal (serão mostrados junto com a OP)
+                        if prod["status"] == "Setup" and prod["vinculo_id"]:
+                            continue
+                            
+                        col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 2])
+                        
+                        with col1:
+                            st.write(f"**{prod['pedido']}**")
+                            if prod["status"] == "Setup":
+                                st.caption("🔧 SETUP")
+                            else:
+                                desc = get_descricao_produto(prod['item'])
+                                st.caption(f"Item: {prod['item']} - {desc[:30]}...")
+                        
+                        with col2:
+                            st.write(f"Início: {prod['inicio'].strftime('%d/%m %H:%M')}")
+                            st.write(f"Fim: {prod['fim'].strftime('%d/%m %H:%M')}")
+                        
+                        with col3:
+                            if prod["status"] != "Setup":
+                                st.metric("QTD", f"{int(prod['qtd']):,}")
+                            else:
+                                st.write("Setup")
+                        
+                        with col4:
+                            if prod["status"] == "Pendente":
+                                if prod["em_execucao"]:
+                                    st.markdown("🟠 **Executando**")
+                                elif prod["atrasada"]:
+                                    st.markdown("🔴 **Atrasada**")
+                                else:
+                                    st.markdown("🔵 **Pendente**")
+                            else:
+                                st.markdown("⚪ **Setup**")
+                        
+                        with col5:
+                            if prod["status"] == "Pendente":
+                                # Botão de finalizar
+                                if st.button("✅ Finalizar", key=f"fin_{prod['id']}"):
+                                    finalizar_op(prod["id"])
+                                    st.success("OP finalizada!")
+                                    st.rerun()
+                                
+                                # Botão de reprogramar
+                                with st.popover("📅 Reprogramar"):
+                                    st.markdown(f"**Reprogramar {prod['pedido']}**")
+                                    
+                                    nova_data = st.date_input(
+                                        "Nova data",
+                                        value=prod['inicio'].date(),
+                                        key=f"data_{prod['id']}"
+                                    )
+                                    
+                                    nova_hora = st.time_input(
+                                        "Nova hora",
+                                        value=prod['inicio'].time(),
+                                        key=f"hora_{prod['id']}"
+                                    )
+                                    
+                                    if st.button("Confirmar reprogramação", key=f"conf_{prod['id']}"):
+                                        novo_inicio = datetime.combine(nova_data, nova_hora)
+                                        reprogramar_op(prod["id"], novo_inicio, st.session_state.user_email)
+                                        st.success("OP reprogramada! OPs seguintes ajustadas.")
+                                        st.rerun()
+                            
+                            # Botão de deletar (para todos)
+                            if st.button("🗑️ Deletar", key=f"del_{prod['id']}"):
+                                deletar_op(prod["id"])
+                                st.success("OP e setup deletados!")
+                                st.rerun()
+                        
+                        st.divider()
     else:
         st.info("Nenhuma OP cadastrada")
 
@@ -896,7 +1065,8 @@ with tab5:
     st.subheader("📋 Produtos")
     st.dataframe(
         df_produtos,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
 
@@ -905,6 +1075,8 @@ with tab5:
 # =================================================================
 
 with tab6:
+    st.subheader("📊 Cargas Sopro")
+    
     df_c = carregar_dados()
     
     if not df_c.empty:
@@ -913,20 +1085,32 @@ with tab6:
             (df_c["qtd"] > 0)
         ]
         
-        total_cargas = (
-            df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]["qtd"].sum()
-            / CARGA_UNIDADE
-        )
+        df_sopro = df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]
         
-        st.metric(
-            "Total Geral de Cargas Sopro",
-            f"{total_cargas:.1f}"
-        )
-        
-        st.table(
-            df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)]
-            [["maquina","pedido","qtd"]]
-        )
+        if not df_sopro.empty:
+            total_cargas = df_sopro["qtd"].sum() / CARGA_UNIDADE
+            
+            st.metric(
+                "Total Geral de Cargas Sopro",
+                f"{total_cargas:.1f}"
+            )
+            
+            # Tabela por máquina
+            st.subheader("Distribuição por Máquina")
+            for maquina in MAQUINAS_SOPRO:
+                df_maq = df_sopro[df_sopro["maquina"] == maquina]
+                if not df_maq.empty:
+                    cargas_maq = df_maq["qtd"].sum() / CARGA_UNIDADE
+                    with st.expander(f"{maquina} - {cargas_maq:.1f} cargas"):
+                        st.dataframe(
+                            df_maq[["pedido", "qtd"]],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+        else:
+            st.info("Nenhuma carga de sopro pendente")
+    else:
+        st.info("Nenhuma OP cadastrada")
 
 
 # =================================================================
@@ -935,5 +1119,5 @@ with tab6:
 
 st.divider()
 st.caption(
-    "v7.1 | Industrial By William | PCP Serigrafia + Sopro | Supabase Edition"
+    "v7.3 | Industrial By William | PCP Serigrafia + Sopro | Setup automático 30min | Reprogramação em cascata"
 )

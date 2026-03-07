@@ -65,16 +65,20 @@ def proximo_horario(maq):
 def calcular_fim_op(inicio, qtd):
     return inicio + timedelta(hours=qtd / CADENCIA_PADRAO)
 
+# =================================================================
+# INSERIR PRODUÇÃO - CORRIGIDO (sem criado_por/criado_em)
+# =================================================================
 def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
     conn = conectar()
     cur = conn.cursor()
     
     try:
+        # Versão SEM as colunas de auditoria
         cur.execute(
             """
             INSERT INTO agenda
-            (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (maquina, pedido, item, inicio, fim, status, qtd)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
             """,
             (
@@ -84,22 +88,21 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
                 inicio,
                 fim,
                 "Pendente",
-                qtd,
-                usuario,
-                agora
+                qtd
             )
         )
         
         producao_id = cur.fetchone()[0]
         
+        # Inserir setup
         setup_inicio = inicio - timedelta(minutes=SETUP_DURACAO)
         setup_fim = inicio
         
         cur.execute(
             """
             INSERT INTO agenda
-            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             (
                 maquina,
@@ -109,9 +112,7 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
                 setup_fim,
                 "Setup",
                 0,
-                producao_id,
-                usuario,
-                agora
+                producao_id
             )
         )
         
@@ -126,6 +127,9 @@ def inserir_producao(maquina, pedido, item, inicio, fim, qtd, usuario):
         cur.close()
         conn.close()
 
+# =================================================================
+# INSERIR SETUP MANUAL - CORRIGIDO (sem criado_por/criado_em)
+# =================================================================
 def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
     conn = conectar()
     cur = conn.cursor()
@@ -134,8 +138,8 @@ def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
         cur.execute(
             """
             INSERT INTO agenda
-            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             (
                 maquina,
@@ -145,9 +149,7 @@ def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
                 fim,
                 "Setup",
                 0,
-                vinculo,
-                usuario,
-                agora
+                vinculo
             )
         )
         
@@ -160,6 +162,9 @@ def inserir_setup(maquina, pedido, inicio, fim, vinculo, usuario):
         cur.close()
         conn.close()
 
+# =================================================================
+# FINALIZAR OP
+# =================================================================
 def finalizar_op(id_op):
     conn = conectar()
     cur = conn.cursor()
@@ -171,6 +176,9 @@ def finalizar_op(id_op):
     cur.close()
     conn.close()
 
+# =================================================================
+# DELETAR OP (E SEU SETUP)
+# =================================================================
 def deletar_op(id_op):
     conn = conectar()
     cur = conn.cursor()
@@ -184,6 +192,9 @@ def deletar_op(id_op):
     cur.close()
     conn.close()
 
+# =================================================================
+# REPROGRAMAR OP - CORRIGIDO (sem alterado_por/alterado_em)
+# =================================================================
 def reprogramar_op(id_op, novo_inicio, usuario):
     conn = conectar()
     cur = conn.cursor()
@@ -217,13 +228,14 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         
         novo_fim = calcular_fim_op(novo_inicio, qtd)
         
+        # Versão SEM alterado_por/alterado_em
         cur.execute(
             """
             UPDATE agenda 
-            SET inicio = %s, fim = %s, alterado_por = %s, alterado_em = %s
+            SET inicio = %s, fim = %s
             WHERE id = %s
             """,
-            (novo_inicio, novo_fim, usuario, agora, producao_id)
+            (novo_inicio, novo_fim, producao_id)
         )
         
         if setup:
@@ -234,10 +246,10 @@ def reprogramar_op(id_op, novo_inicio, usuario):
             cur.execute(
                 """
                 UPDATE agenda 
-                SET inicio = %s, fim = %s, alterado_por = %s, alterado_em = %s
+                SET inicio = %s, fim = %s
                 WHERE id = %s
                 """,
-                (novo_setup_inicio, novo_setup_fim, usuario, agora, setup_id)
+                (novo_setup_inicio, novo_setup_fim, setup_id)
             )
         
         cur.execute("""
@@ -311,3 +323,4 @@ def reprogramar_op(id_op, novo_inicio, usuario):
     finally:
         cur.close()
         conn.close()
+        

@@ -168,10 +168,13 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     # =================================================================
-    # LINHA DO TEMPO "AGORA" - CORRIGIDA USANDO datetime DIRETO
+    # LINHA DO TEMPO "AGORA" - CORRIGIDA USANDO TIMESTAMP EM MILISSEGUNDOS
     # =================================================================
+    # Converter datetime para timestamp em milissegundos (formato que Plotly aceita)
+    agora_timestamp = agora.timestamp() * 1000
+    
     fig.add_vline(
-        x=agora,  # 👈 Passando datetime direto (Plotly converte automaticamente)
+        x=agora_timestamp,  # 👈 AGORA EM MILISSEGUNDOS - CORREÇÃO AQUI!
         line_width=3,
         line_dash="dash",
         line_color="#E63946",
@@ -350,4 +353,3 @@ def renderizar_setor(lista_maquinas, altura=500):
             st.metric("📈 Taxa de Ocupação", "0%")
     
     st.divider()
-    

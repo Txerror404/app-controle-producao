@@ -67,8 +67,16 @@ def proximo_horario(maq):
             return max(agora, ultimo_fim)
     return agora
 
+# =================================================================
+# CALCULAR FIM DA OP - CORRIGIDO (com conversão Decimal para float)
+# =================================================================
 def calcular_fim_op(inicio, qtd):
-    return inicio + timedelta(hours=qtd / CADENCIA_PADRAO)
+    # Garantir que qtd seja float (resolve problema de Decimal do PostgreSQL)
+    try:
+        qtd_float = float(qtd)
+    except:
+        qtd_float = 0
+    return inicio + timedelta(hours=qtd_float / CADENCIA_PADRAO)
 
 # =================================================================
 # INSERIR PRODUÇÃO - CORRIGIDO (SEM criado_por E criado_em)
@@ -198,7 +206,7 @@ def deletar_op(id_op):
     conn.close()
 
 # =================================================================
-# REPROGRAMAR OP - CORRIGIDO (SEM alterado_por E alterado_em)
+# REPROGRAMAR OP - CORRIGIDO (com conversão Decimal para float)
 # =================================================================
 def reprogramar_op(id_op, novo_inicio, usuario):
     conn = conectar()
@@ -231,7 +239,16 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         
         producao_id, maquina, old_inicio, old_fim, vinculo_id, status, qtd = producao
         
-        novo_fim = calcular_fim_op(novo_inicio, qtd)
+        # =================================================================
+        # CORREÇÃO: Converter Decimal para float
+        # =================================================================
+        try:
+            # Tenta converter para float (funciona com Decimal e outros tipos)
+            qtd_float = float(qtd)
+        except:
+            qtd_float = 0
+        
+        novo_fim = calcular_fim_op(novo_inicio, qtd_float)
         
         # ATENÇÃO: Esta query NÃO usa alterado_por e alterado_em
         cur.execute(
@@ -276,6 +293,14 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         for seguinte in seguintes:
             seg_id, seg_inicio, seg_fim, seg_vinculo, seg_status, seg_qtd = seguinte
             
+            # =================================================================
+            # CORREÇÃO: Converter Decimal para float também aqui
+            # =================================================================
+            try:
+                seg_qtd_float = float(seg_qtd)
+            except:
+                seg_qtd_float = 0
+            
             if seg_status == "Setup":
                 cur.execute("SELECT id, inicio FROM agenda WHERE vinculo_id = %s AND status = 'Pendente'", (seg_vinculo or seg_id,))
                 prod_vinculada = cur.fetchone()
@@ -291,7 +316,7 @@ def reprogramar_op(id_op, novo_inicio, usuario):
                     )
                     
                     novo_prod_inicio = novo_setup_fim
-                    novo_prod_fim = calcular_fim_op(novo_prod_inicio, seg_qtd if seg_qtd > 0 else qtd)
+                    novo_prod_fim = calcular_fim_op(novo_prod_inicio, seg_qtd_float if seg_qtd_float > 0 else qtd_float)
                     
                     cur.execute(
                         "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
@@ -312,7 +337,7 @@ def reprogramar_op(id_op, novo_inicio, usuario):
                     current_end = novo_setup_fim
             else:
                 novo_seg_inicio = current_end
-                novo_seg_fim = calcular_fim_op(novo_seg_inicio, seg_qtd)
+                novo_seg_fim = calcular_fim_op(novo_seg_inicio, seg_qtd_float)
                 
                 cur.execute(
                     "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
@@ -329,4 +354,3 @@ def reprogramar_op(id_op, novo_inicio, usuario):
     finally:
         cur.close()
         conn.close()
-        

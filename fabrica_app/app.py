@@ -867,7 +867,7 @@ with aba4:
                         with col_a:
                             if st.button("✅ Finalizar", key=f"ok_{prod['id']}", use_container_width=True):
                                 with conectar() as c: 
-                                    c.execute("UPDATE agenda SET status='Concluído' WHERE id=?", (prod['id'],))
+                                    c.execute("UPDATE agenda SET status='Concluído' WHERE id=%s", (prod['id'],))
                                     c.commit()
                                 st.rerun()
                         
@@ -875,7 +875,7 @@ with aba4:
                             if is_admin:
                                 if st.button("🗑️ Deletar", key=f"del_{prod['id']}", use_container_width=True):
                                     with conectar() as c: 
-                                        c.execute("DELETE FROM agenda WHERE id=? OR vinculo_id=?", (prod['id'], prod['id']))
+                                        c.execute("DELETE FROM agenda WHERE id=%s OR vinculo_id=%s", (prod['id'], prod['id']))
                                         c.commit()
                                     st.rerun()
                         

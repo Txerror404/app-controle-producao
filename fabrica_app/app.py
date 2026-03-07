@@ -150,7 +150,7 @@ CARGA_UNIDADE = 49504
 fuso_br = pytz.timezone("America/Sao_Paulo")
 agora = datetime.now(fuso_br).replace(tzinfo=None)
 
-GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub?gid=732189898&single=true&output=csv"
+GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0S5BpJDZ0Wt9_g6UrNZbHK6Q7ekPwvKJC4lfAwFxs5E_ZJm-yfmAd2Uc51etjgCgs0l2kkuktVwIr/pub%sgid=732189898&single=true&output=csv"
 
 st.markdown("""
     <style>
@@ -599,7 +599,7 @@ with aba1:
                         cur = conn.cursor()
                         # Insere a PRODUÇÃO com dados de quem criou
                         cur.execute(
-                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?)",
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (%s,%s,%s,%s,%s%s,%s,%s,%s)",
                             (maq_sel, f"{cliente_texto} | OP:{op_num}", item_sel,
                              inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
@@ -613,7 +613,7 @@ with aba1:
                         if minutos_parada > 0:
                             fim_setup = fim_dt + timedelta(minutes=minutos_parada)
                             conn.execute(
-                                "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                                "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, vinculo_id, criado_por, criado_em) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                                 (maq_sel, f"SETUP {op_num}", "Ajuste",
                                  fim_dt.strftime('%Y-%m-%d %H:%M:%S'),
                                  fim_setup.strftime('%Y-%m-%d %H:%M:%S'),
@@ -631,7 +631,7 @@ with aba1:
                     with conectar() as conn:
                         cur = conn.cursor()
                         cur.execute(
-                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?)",
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (%s%s%s,%s,%s,%s,%s,%s,%s)",
                             (maq_sel, f"SETUP MANUAL | {op_num}", item_sel,
                              inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
@@ -649,7 +649,7 @@ with aba1:
                     with conectar() as conn:
                         cur = conn.cursor()
                         cur.execute(
-                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (?,?,?,?,?,?,?,?,?)",
+                            "INSERT INTO agenda (maquina, pedido, item, inicio, fim, status, qtd, criado_por, criado_em) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                             (maq_sel, f"MANUTENÇÃO | {op_num}", item_sel,
                              inicio_dt.strftime('%Y-%m-%d %H:%M:%S'),
                              fim_parada.strftime('%Y-%m-%d %H:%M:%S'),
@@ -896,9 +896,9 @@ with aba4:
                                             with conectar() as c:
                                                 c.execute("""
                                                     UPDATE agenda 
-                                                    SET inicio=?, fim=?, 
-                                                        alterado_por=?, alterado_em=? 
-                                                    WHERE id=?
+                                                    SET inicio=%s, fim=%s, 
+                                                        alterado_por=%s, alterado_em=%s 
+                                                    WHERE id=%s
                                                     """, 
                                                     (novo_i.strftime('%Y-%m-%d %H:%M:%S'), 
                                                      novo_f.strftime('%Y-%m-%d %H:%M:%S'),

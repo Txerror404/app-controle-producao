@@ -10,10 +10,8 @@ from database import carregar_dados
 from utils import get_descricao_produto
 
 def renderizar_cabecalho(email_usuario):
-    # Fuso Brasil
-    fuso = pytz.timezone("America/Sao_Paulo")
-    # Hora atual SEMPRE recalculada
-    agora = datetime.now(fuso).replace(tzinfo=None)
+    # Hora atual com timezone
+    agora = datetime.now(pytz.timezone("America/Sao_Paulo"))
     
     st.markdown(f"""
     <div class="custom-header">
@@ -41,10 +39,9 @@ def renderizar_rodape():
 
 def renderizar_setor(lista_maquinas, altura=500):
     # =================================================================
-    # FUSO BRASIL E HORA ATUAL - RECALCULADO A CADA EXECUÇÃO
+    # HORA ATUAL COM TIMEZONE - RECALCULADO A CADA EXECUÇÃO
     # =================================================================
-    fuso = pytz.timezone("America/Sao_Paulo")
-    agora = datetime.now(fuso).replace(tzinfo=None)
+    agora = datetime.now(pytz.timezone("America/Sao_Paulo"))
     
     df_all = carregar_dados()
     
@@ -168,13 +165,10 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     # =================================================================
-    # LINHA DO TEMPO "AGORA" - CORRIGIDA USANDO TIMESTAMP EM MILISSEGUNDOS
+    # LINHA DO TEMPO "AGORA" - CORRETA (datetime object)
     # =================================================================
-    # Converter datetime para timestamp em milissegundos (formato que Plotly aceita)
-    agora_timestamp = agora.timestamp() * 1000
-    
     fig.add_vline(
-        x=agora_timestamp,  # 👈 AGORA EM MILISSEGUNDOS - CORREÇÃO AQUI!
+        x=agora,  # 👈 DATETIME OBJECT - CORRETO PARA EIXO TYPE='DATE'
         line_width=3,
         line_dash="dash",
         line_color="#E63946",

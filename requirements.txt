@@ -3,3 +3,5 @@ pandas
 plotly
 pytz
 streamlit-autorefresh
+gspread
+st-gsheets-connection

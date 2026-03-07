@@ -33,8 +33,17 @@ st.write("Banco utilizado:", DB_PATH)
 # =================================================================
 
 def conectar():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
+    try:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        return conn
+
+    except sqlite3.OperationalError:
+
+        # fallback caso /mount/data não esteja disponível
+        fallback = "pcp.db"
+        st.warning("Banco persistente indisponível, usando banco temporário.")
+        return sqlite3.connect(fallback, check_same_thread=False)
 
 # =================================================================
 # CRIAÇÃO DA TABELA (PROTEÇÃO DE HISTÓRICO)

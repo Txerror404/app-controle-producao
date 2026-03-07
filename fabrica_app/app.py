@@ -939,5 +939,18 @@ with aba6:
                  f"{df_p[df_p['maquina'].isin(MAQUINAS_SOPRO)]['qtd'].sum() / CARGA_UNIDADE:.1f}")
         st.table(df_p[df_p["maquina"].isin(MAQUINAS_SOPRO)][["maquina", "pedido", "qtd"]])
 
+# =================================================================
+# BACKUP DO BANCO
+# =================================================================
+
+st.divider()
+
+st.download_button(
+    label="💾 Baixar backup do banco de dados",
+    data=open(DB_PATH, "rb"),
+    file_name="backup_pcp.db",
+    mime="application/octet-stream"
+)
+
 st.divider()
 st.caption("v7.1 | Industrial By William | Serigrafia | Sopro | Com Metadados e Rastreabilidade - CORRIGIDO")

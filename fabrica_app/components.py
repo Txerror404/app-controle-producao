@@ -171,7 +171,7 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     # =================================================================
-    # LINHA DO TEMPO "AGORA" - USANDO add_shape + add_annotation (MAIS ROBUSTO)
+    # LINHA DO TEMPO "AGORA" - USANDO add_shape + add_annotation
     # =================================================================
     
     # Adicionar linha vertical
@@ -242,30 +242,22 @@ def renderizar_setor(lista_maquinas, altura=500):
         )
     )
     
-# =================================================================
-# EXIBIR GRÁFICO COM ZOOM HABILITADO (APENAS BOTÕES, SEM SCROLL)
-# =================================================================
-st.plotly_chart(fig, use_container_width=True, config={
-    'displayModeBar': True,
-    'scrollZoom': False,  # 👈 ZOOM COM SCROLL DESABILITADO
-    'modeBarButtonsToAdd': [
-        'zoom',           # Zoom box
-        'pan',            # Pan
-        'zoomIn',         # Zoom in
-        'zoomOut',        # Zoom out
-        'autoScale',      # Auto scale
-        'resetScale'      # Reset
-    ],
-    'modeBarButtonsToRemove': [
-        'lasso2d',        # Remove lasso selection
-        'select2d'        # Remove box selection
-    ],
-    'displaylogo': False,  # Remove logo Plotly
-    'doubleClick': 'reset'  # Duplo clique reseta o zoom
-})
+    # =================================================================
+    # EXIBIR GRÁFICO COM ZOOM HABILITADO (APENAS BOTÕES, SEM SCROLL)
+    # =================================================================
+    st.plotly_chart(fig, use_container_width=True, config={
+        'displayModeBar': True,
+        'scrollZoom': False,
+        'modeBarButtonsToAdd': [
+            'zoom', 'pan', 'zoomIn', 'zoomOut', 'autoScale', 'resetScale'
+        ],
+        'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+        'displaylogo': False,
+        'doubleClick': 'reset'
+    })
     
     # =================================================================
-    # OPs ATRASADAS (calculado com horário ATUAL)
+    # OPs ATRASADAS
     # =================================================================
     ops_atrasadas = df_g[df_g["atrasada"]]
     
@@ -273,7 +265,8 @@ st.plotly_chart(fig, use_container_width=True, config={
         st.markdown("#### 🚨 OPs ATRASADAS")
         cols = st.columns(min(3, len(ops_atrasadas)))
         for i, (idx, op) in enumerate(ops_atrasadas.iterrows()):
-            if i >= 3: break
+            if i >= 3:
+                break
             descricao_produto = get_descricao_produto(op['item'])
             with cols[i % 3]:
                 st.markdown(f"""
@@ -298,7 +291,7 @@ st.plotly_chart(fig, use_container_width=True, config={
         st.divider()
     
     # =================================================================
-    # OPs EM EXECUÇÃO (calculado com horário ATUAL)
+    # OPs EM EXECUÇÃO
     # =================================================================
     ops_execucao = df_g[df_g["em_execucao"]]
     
@@ -306,7 +299,8 @@ st.plotly_chart(fig, use_container_width=True, config={
         st.markdown("#### ⚙️ OPs EM EXECUÇÃO")
         cols = st.columns(min(3, len(ops_execucao)))
         for i, (idx, op) in enumerate(ops_execucao.iterrows()):
-            if i >= 3: break
+            if i >= 3:
+                break
             descricao_produto = get_descricao_produto(op['item'])
             with cols[i % 3]:
                 st.markdown(f"""
@@ -356,7 +350,7 @@ st.plotly_chart(fig, use_container_width=True, config={
         st.divider()
     
     # =================================================================
-    # MÉTRICAS (calculado com horário ATUAL)
+    # MÉTRICAS
     # =================================================================
     st.markdown("#### 📊 Métricas Gerais")
     c1, c2, c3, c4 = st.columns(4)

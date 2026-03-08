@@ -6,11 +6,11 @@ import streamlit as st
 import plotly.express as px
 from datetime import datetime, timedelta
 import pytz
-from database import carregar_dados
+from database import carregar_dados, reprogramar_ops_atrasadas
 from utils import get_descricao_produto
 
 def renderizar_cabecalho(email_usuario):
-    # Hora atual com timezone para o relógio
+    # Hora atual com timezone
     agora = datetime.now(pytz.timezone("America/Sao_Paulo"))
     
     st.markdown(f"""
@@ -39,10 +39,14 @@ def renderizar_rodape():
 
 def renderizar_setor(lista_maquinas, altura=500):
     # =================================================================
+    # PRIMEIRO: Reprogramar OPs atrasadas em cascata
+    # =================================================================
+    reprogramar_ops_atrasadas()
+    
+    # =================================================================
     # HORA ATUAL - SEM TIMEZONE PARA COMPARAÇÕES E GRÁFICO
     # =================================================================
     agora_com_timezone = datetime.now(pytz.timezone("America/Sao_Paulo"))
-    # REMOVER timezone para comparar com dados do banco (que são naive)
     agora = agora_com_timezone.replace(tzinfo=None)
     
     df_all = carregar_dados()

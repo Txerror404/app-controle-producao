@@ -12,22 +12,36 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Auto refresh
+# Auto refresh a cada 2 minutos
 st_autorefresh(interval=120000, key="pcp_refresh_global")
 
-# Importar módulos
+# =================================================================
+# IMPORTAÇÕES DOS MÓDULOS
+# =================================================================
+
 from config import *
-from database import conectar
+from database import conectar, carregar_dados
 from utils import carregar_produtos_google
 from styles import aplicar_estilos
-from components import renderizar_cabecalho, renderizar_rodape
+from components import renderizar_cabecalho, renderizar_rodape, renderizar_setor
 from pages.login import mostrar_login
 from pages.serigrafia import mostrar_serigrafia
 from pages.sopro import mostrar_sopro
 from pages.novo_lancamento import mostrar_novo_lancamento
 from pages.gerenciar_ops import mostrar_gerenciar_ops
 from pages.produtos import mostrar_produtos
-from pages.cargas import mostrar_cargas  # 👈 ATUALIZADO: cargas_sopro.py -> cargas.py
+from pages.cargas import mostrar_cargas
+
+# =================================================================
+# IMPORTAÇÕES DO DRAG AND DROP
+# =================================================================
+
+from drag_drop import (
+    criar_interface_drag_drop,
+    criar_botoes_ajuste_rapido,
+    processar_ajuste_rapido,
+    mostrar_info_sidebar
+)
 
 # =================================================================
 # TESTE DE CONEXÃO INICIAL
@@ -65,7 +79,38 @@ if 'df_produtos' not in st.session_state:
 aplicar_estilos()
 
 # =================================================================
-# CABEÇALHO
+# SIDEBAR - CONTROLES DE OPs
+# =================================================================
+
+with st.sidebar:
+    st.title("🎮 Controle de OPs")
+    
+    # Mostrar usuário logado
+    st.markdown(f"**👤 Usuário:** {st.session_state.user_email}")
+    st.markdown("---")
+    
+    # Status rápido das OPs
+    mostrar_info_sidebar()
+    
+    st.markdown("---")
+    
+    # Botões de ajuste rápido
+    st.markdown("### ⚡ Ajuste Rápido")
+    st.markdown("Move TODAS as OPs pendentes:")
+    criar_botoes_ajuste_rapido()
+    processar_ajuste_rapido()
+    
+    st.markdown("---")
+    
+    # Interface de arrastar e soltar
+    criar_interface_drag_drop()
+    
+    st.markdown("---")
+    st.caption("💡 Dica: Selecione uma OP acima e ajuste data/hora")
+    st.caption("🔄 A página atualiza a cada 2 minutos")
+
+# =================================================================
+# CABEÇALHO PRINCIPAL
 # =================================================================
 
 renderizar_cabecalho(st.session_state.user_email)
@@ -83,55 +128,66 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 CARGAS SOPRO"
 ])
 
+# =================================================================
+# ABA 1 - SERIGRAFIA
+# =================================================================
+
 with tab1:
     mostrar_serigrafia()
+
+# =================================================================
+# ABA 2 - SOPRO
+# =================================================================
 
 with tab2:
     mostrar_sopro()
 
+# =================================================================
+# ABA 3 - NOVO LANÇAMENTO
+# =================================================================
+
 with tab3:
     mostrar_novo_lancamento()
+
+# =================================================================
+# ABA 4 - GERENCIAR OPs
+# =================================================================
 
 with tab4:
     mostrar_gerenciar_ops()
 
+# =================================================================
+# ABA 5 - PRODUTOS
+# =================================================================
+
 with tab5:
     mostrar_produtos()
 
+# =================================================================
+# ABA 6 - CARGAS SOPRO
+# =================================================================
+
 with tab6:
-    mostrar_cargas()  # 👈 ATUALIZADO: função renomeada
-    
-# =================================================================
-# INTERFACE DE ARRASTAR E SOLTAR (SIDEBAR)
-# =================================================================
+    mostrar_cargas()
 
-from drag_drop import criar_interface_drag_drop, criar_botoes_ajuste_rapido, processar_ajuste_rapido
-
-with st.sidebar:
-    st.title("🖱️ Controle de OPs")
-    
-    # Mostrar usuário logado
-    st.markdown(f"**Usuário:** {st.session_state.user_email}")
-    st.markdown("---")
-    
-    # Botões de ajuste rápido
-    criar_botoes_ajuste_rapido()
-    processar_ajuste_rapido()
-    
-    # Interface de arrastar e soltar
-    criar_interface_drag_drop()
-    
-    # Informações adicionais
-    st.markdown("---")
-    st.markdown("### 📊 Status")
-    df_status = carregar_dados()
-    if not df_status.empty:
-        pendentes = len(df_status[df_status["status"] == "Pendente"])
-        atrasadas = len(df_status[df_status["atrasada"] == True]) if 'atrasada' in df_status.columns else 0
-        st.metric("OPs Pendentes", pendentes)
-        st.metric("OPs Atrasadas", atrasadas)
 # =================================================================
 # RODAPÉ
 # =================================================================
 
 renderizar_rodape()
+
+# =================================================================
+# DEBUG INFO (SÓ APARECE EM DESENVOLVIMENTO)
+# =================================================================
+
+if st.session_state.get('debug_mode', False):
+    with st.expander("🔧 Informações de Debug"):
+        st.write("### Sessão")
+        st.write(st.session_state)
+        
+        st.write("### Produtos Carregados")
+        if 'df_produtos' in st.session_state:
+            st.write(f"Quantidade: {len(st.session_state.df_produtos)}")
+            st.dataframe(st.session_state.df_produtos.head())
+        else:
+            st.write("Nenhum produto carregado")

@@ -1,5 +1,5 @@
 # =================================================================
-# COMPONENTES VISUAIS REUTILIZÁVEIS - TIMELINE DINÂMICA CORRIGIDA
+# COMPONENTES VISUAIS REUTILIZÁVEIS - COM TODAS AS FUNCIONALIDADES
 # =================================================================
 
 import streamlit as st
@@ -243,54 +243,19 @@ def renderizar_setor(lista_maquinas, altura=500):
     )
     
     # =================================================================
-    # EXIBIR GRÁFICO COM ZOOM HABILITADO (APENAS BOTÕES, SEM SCROLL)
+    # EXIBIR GRÁFICO
     # =================================================================
     st.plotly_chart(fig, use_container_width=True, config={
         'displayModeBar': True,
         'scrollZoom': False,
-        'modeBarButtonsToAdd': [
-            'zoom', 'pan', 'zoomIn', 'zoomOut', 'autoScale', 'resetScale'
-        ],
+        'modeBarButtonsToAdd': ['zoom', 'pan', 'zoomIn', 'zoomOut', 'autoScale', 'resetScale'],
         'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
         'displaylogo': False,
         'doubleClick': 'reset'
     })
-
-    # =================================================================
-# INTERATIVIDADE - CLIQUE NAS OPs
-# =================================================================
-import json
-
-# Capturar eventos de clique no gráfico
-if 'selected_op' not in st.session_state:
-    st.session_state.selected_op = None
-
-# Usar plotly events para capturar clique
-try:
-    # Esta é uma abordagem simplificada
-    # Para uma solução mais robusta, precisaríamos de JavaScript customizado
-    pass
-except:
-    pass
-
-# Mostrar OP selecionada
-if st.session_state.selected_op:
-    st.info(f"OP selecionada: {st.session_state.selected_op}")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("⏪ -30min"):
-            # Lógica para mover OP
-            pass
-    with col2:
-        if st.button("⏪ -1h"):
-            pass
-    with col3:
-        if st.button("⏩ +1h"):
-            pass
     
     # =================================================================
-    # OPs ATRASADAS
+    # CARDS - OPs ATRASADAS
     # =================================================================
     ops_atrasadas = df_g[df_g["atrasada"]]
     
@@ -324,7 +289,7 @@ if st.session_state.selected_op:
         st.divider()
     
     # =================================================================
-    # OPs EM EXECUÇÃO
+    # CARDS - OPs EM EXECUÇÃO
     # =================================================================
     ops_execucao = df_g[df_g["em_execucao"]]
     
@@ -358,7 +323,7 @@ if st.session_state.selected_op:
         st.divider()
     
     # =================================================================
-    # MÁQUINAS SEM PROGRAMAÇÃO
+    # CARDS - MÁQUINAS SEM PROGRAMAÇÃO
     # =================================================================
     maquinas_com_op = df_g[df_g["status"] == "Pendente"]["maquina"].unique()
     maquinas_sem_programacao = [

@@ -242,15 +242,27 @@ def renderizar_setor(lista_maquinas, altura=500):
         )
     )
     
-    # =================================================================
-    # EXIBIR GRÁFICO COM ZOOM HABILITADO
-    # =================================================================
-    st.plotly_chart(fig, use_container_width=True, config={
-        'displayModeBar': True,
-        'scrollZoom': True,
-        'modeBarButtonsToAdd': ['zoom', 'pan', 'zoomIn', 'zoomOut', 'autoScale', 'resetScale'],
-        'modeBarButtonsToRemove': ['lasso2d', 'select2d']
-    })
+# =================================================================
+# EXIBIR GRÁFICO COM ZOOM HABILITADO (APENAS BOTÕES, SEM SCROLL)
+# =================================================================
+st.plotly_chart(fig, use_container_width=True, config={
+    'displayModeBar': True,
+    'scrollZoom': False,  # 👈 ZOOM COM SCROLL DESABILITADO
+    'modeBarButtonsToAdd': [
+        'zoom',           # Zoom box
+        'pan',            # Pan
+        'zoomIn',         # Zoom in
+        'zoomOut',        # Zoom out
+        'autoScale',      # Auto scale
+        'resetScale'      # Reset
+    ],
+    'modeBarButtonsToRemove': [
+        'lasso2d',        # Remove lasso selection
+        'select2d'        # Remove box selection
+    ],
+    'displaylogo': False,  # Remove logo Plotly
+    'doubleClick': 'reset'  # Duplo clique reseta o zoom
+})
     
     # =================================================================
     # OPs ATRASADAS (calculado com horário ATUAL)

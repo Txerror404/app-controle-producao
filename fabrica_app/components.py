@@ -255,6 +255,39 @@ def renderizar_setor(lista_maquinas, altura=500):
         'displaylogo': False,
         'doubleClick': 'reset'
     })
+
+    # =================================================================
+# INTERATIVIDADE - CLIQUE NAS OPs
+# =================================================================
+import json
+
+# Capturar eventos de clique no gráfico
+if 'selected_op' not in st.session_state:
+    st.session_state.selected_op = None
+
+# Usar plotly events para capturar clique
+try:
+    # Esta é uma abordagem simplificada
+    # Para uma solução mais robusta, precisaríamos de JavaScript customizado
+    pass
+except:
+    pass
+
+# Mostrar OP selecionada
+if st.session_state.selected_op:
+    st.info(f"OP selecionada: {st.session_state.selected_op}")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("⏪ -30min"):
+            # Lógica para mover OP
+            pass
+    with col2:
+        if st.button("⏪ -1h"):
+            pass
+    with col3:
+        if st.button("⏩ +1h"):
+            pass
     
     # =================================================================
     # OPs ATRASADAS

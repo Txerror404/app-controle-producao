@@ -210,7 +210,7 @@ def deletar_op(id_op):
     conn.close()
 
 # =================================================================
-# REPROGRAMAR OP - CORRIGIDO (com conversão Decimal para float)
+# REPROGRAMAR OP (E EMPURRAR AS SEGUINTES)
 # =================================================================
 def reprogramar_op(id_op, novo_inicio, usuario):
     conn = conectar()
@@ -243,18 +243,13 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         
         producao_id, maquina, old_inicio, old_fim, vinculo_id, status, qtd = producao
         
-        # =================================================================
-        # CORREÇÃO: Converter Decimal para float
-        # =================================================================
         try:
-            # Tenta converter para float (funciona com Decimal e outros tipos)
             qtd_float = float(qtd)
         except:
             qtd_float = 0
         
         novo_fim = calcular_fim_op(novo_inicio, qtd_float)
         
-        # ATENÇÃO: Esta query NÃO usa alterado_por e alterado_em
         cur.execute(
             """
             UPDATE agenda 
@@ -278,7 +273,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
                 (novo_setup_inicio, novo_setup_fim, setup_id)
             )
         
-        # Buscar OPs seguintes e recalcular
         cur.execute("""
             SELECT id, inicio, fim, vinculo_id, status, qtd
             FROM agenda
@@ -297,9 +291,6 @@ def reprogramar_op(id_op, novo_inicio, usuario):
         for seguinte in seguintes:
             seg_id, seg_inicio, seg_fim, seg_vinculo, seg_status, seg_qtd = seguinte
             
-            # =================================================================
-            # CORREÇÃO: Converter Decimal para float também aqui
-            # =================================================================
             try:
                 seg_qtd_float = float(seg_qtd)
             except:
@@ -358,8 +349,9 @@ def reprogramar_op(id_op, novo_inicio, usuario):
     finally:
         cur.close()
         conn.close()
-        # =================================================================
-# REPROGRAMAR OPs ATRASADAS EM CASCATA
+
+# =================================================================
+# REPROGRAMAR OPs ATRASADAS EM CASCATA (NOVA FUNÇÃO)
 # =================================================================
 def reprogramar_ops_atrasadas():
     """
@@ -421,7 +413,6 @@ def reprogramar_ops_atrasadas():
             # =================================================================
             # PASSO 3: Reconstruir a sequência completa a partir do horário atual
             # =================================================================
-            novo_sequencia = []
             current_time = agora
             
             for op in todas_ops_maquina:
@@ -486,4 +477,3 @@ def reprogramar_ops_atrasadas():
     finally:
         cur.close()
         conn.close()
-        

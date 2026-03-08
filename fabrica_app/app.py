@@ -100,7 +100,36 @@ with tab5:
 
 with tab6:
     mostrar_cargas()  # 👈 ATUALIZADO: função renomeada
+    
+# =================================================================
+# INTERFACE DE ARRASTAR E SOLTAR (SIDEBAR)
+# =================================================================
 
+from drag_drop import criar_interface_drag_drop, criar_botoes_ajuste_rapido, processar_ajuste_rapido
+
+with st.sidebar:
+    st.title("🖱️ Controle de OPs")
+    
+    # Mostrar usuário logado
+    st.markdown(f"**Usuário:** {st.session_state.user_email}")
+    st.markdown("---")
+    
+    # Botões de ajuste rápido
+    criar_botoes_ajuste_rapido()
+    processar_ajuste_rapido()
+    
+    # Interface de arrastar e soltar
+    criar_interface_drag_drop()
+    
+    # Informações adicionais
+    st.markdown("---")
+    st.markdown("### 📊 Status")
+    df_status = carregar_dados()
+    if not df_status.empty:
+        pendentes = len(df_status[df_status["status"] == "Pendente"])
+        atrasadas = len(df_status[df_status["atrasada"] == True]) if 'atrasada' in df_status.columns else 0
+        st.metric("OPs Pendentes", pendentes)
+        st.metric("OPs Atrasadas", atrasadas)
 # =================================================================
 # RODAPÉ
 # =================================================================

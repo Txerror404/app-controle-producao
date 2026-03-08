@@ -477,3 +477,40 @@ def reprogramar_ops_atrasadas():
     finally:
         cur.close()
         conn.close()
+        # =================================================================
+# REPROGRAMAR MÚLTIPLAS OPs (para ajustes em lote)
+# =================================================================
+def reprogramar_multiplas_ops(lista_ids, delta_horas, usuario):
+    """
+    Reprograma múltiplas OPs de uma vez
+    """
+    conn = conectar()
+    cur = conn.cursor()
+    
+    try:
+        for op_id in lista_ids:
+            # Buscar OP atual
+            cur.execute(
+                "SELECT inicio, maquina FROM agenda WHERE id = %s",
+                (op_id,)
+            )
+            resultado = cur.fetchone()
+            if not resultado:
+                continue
+            
+            old_inicio, maquina = resultado
+            novo_inicio = old_inicio + timedelta(hours=delta_horas)
+            
+            # Reprogramar OP individual
+            reprogramar_op(op_id, novo_inicio, usuario)
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao reprogramar múltiplas OPs: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()

@@ -358,4 +358,132 @@ def reprogramar_op(id_op, novo_inicio, usuario):
     finally:
         cur.close()
         conn.close()
+        # =================================================================
+# REPROGRAMAR OPs ATRASADAS EM CASCATA
+# =================================================================
+def reprogramar_ops_atrasadas():
+    """
+    Identifica OPs atrasadas e reprograma todas as OPs seguintes
+    em suas respectivas máquinas (planejamento cascata)
+    """
+    conn = conectar()
+    cur = conn.cursor()
+    
+    try:
+        # Buscar horário atual sem timezone
+        agora = datetime.now(pytz.timezone("America/Sao_Paulo")).replace(tzinfo=None)
+        
+        # =================================================================
+        # PASSO 1: Identificar OPs de PRODUÇÃO atrasadas (fim < agora)
+        # =================================================================
+        cur.execute("""
+            SELECT id, maquina, inicio, fim, qtd, vinculo_id
+            FROM agenda
+            WHERE status = 'Pendente' 
+                AND fim < %s
+                AND (item != 'Setup' OR item IS NULL)
+            ORDER BY maquina, inicio
+        """, (agora,))
+        
+        ops_atrasadas = cur.fetchall()
+        
+        if not ops_atrasadas:
+            # Não há OPs atrasadas
+            conn.commit()
+            return
+        
+        # Agrupar por máquina para processar cada máquina separadamente
+        maquinas_ops = {}
+        for op in ops_atrasadas:
+            op_id, maquina, old_inicio, old_fim, qtd, vinculo_id = op
+            if maquina not in maquinas_ops:
+                maquinas_ops[maquina] = []
+            maquinas_ops[maquina].append(op)
+        
+        # =================================================================
+        # PASSO 2: Para cada máquina, reprocessar todas as OPs
+        # =================================================================
+        for maquina, ops_maq in maquinas_ops.items():
+            # Buscar TODAS as OPs desta máquina (incluindo as não atrasadas)
+            cur.execute("""
+                SELECT id, inicio, fim, status, qtd, vinculo_id, item
+                FROM agenda
+                WHERE maquina = %s 
+                    AND status IN ('Pendente', 'Setup')
+                ORDER BY inicio
+            """, (maquina,))
+            
+            todas_ops_maquina = cur.fetchall()
+            
+            if not todas_ops_maquina:
+                continue
+            
+            # =================================================================
+            # PASSO 3: Reconstruir a sequência completa a partir do horário atual
+            # =================================================================
+            novo_sequencia = []
+            current_time = agora
+            
+            for op in todas_ops_maquina:
+                op_id, old_inicio, old_fim, status, qtd, vinculo_id, item = op
+                
+                if status == "Setup":
+                    # Setup deve vir antes da produção vinculada
+                    # Vamos pular setups aqui, eles serão recriados junto com as produções
+                    continue
+                
+                # É uma produção
+                try:
+                    qtd_float = float(qtd) if qtd else 0
+                except:
+                    qtd_float = 0
+                
+                # Calcular novo fim baseado no horário atual
+                novo_fim_prod = calcular_fim_op(current_time, qtd_float)
+                
+                # Atualizar a produção
+                cur.execute(
+                    """
+                    UPDATE agenda 
+                    SET inicio = %s, fim = %s
+                    WHERE id = %s
+                    """,
+                    (current_time, novo_fim_prod, op_id)
+                )
+                
+                # Atualizar o setup vinculado (se existir)
+                if vinculo_id:
+                    # Buscar o setup vinculado
+                    cur.execute(
+                        "SELECT id FROM agenda WHERE vinculo_id = %s AND status = 'Setup'",
+                        (op_id,)
+                    )
+                    setup = cur.fetchone()
+                    
+                    if setup:
+                        setup_id = setup[0]
+                        setup_inicio = current_time - timedelta(minutes=SETUP_DURACAO)
+                        setup_fim = current_time
+                        
+                        cur.execute(
+                            "UPDATE agenda SET inicio = %s, fim = %s WHERE id = %s",
+                            (setup_inicio, setup_fim, setup_id)
+                        )
+                
+                # Avançar o tempo para a próxima OP
+                current_time = novo_fim_prod
+            
+            # =================================================================
+            # PASSO 4: Log da reprogramação (opcional)
+            # =================================================================
+            st.info(f"🔄 Máquina {maquina}: {len(ops_maq)} OPs atrasadas reprogramadas em cascata")
+        
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao reprogramar OPs atrasadas: {e}")
+    finally:
+        cur.close()
+        conn.close()
         

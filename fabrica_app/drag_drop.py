@@ -47,14 +47,14 @@ def criar_interface_drag_drop():
         op_id = df_pendentes.iloc[idx]['id']
         op_maquina = df_pendentes.iloc[idx]['maquina']
         op_inicio = df_pendentes.iloc[idx]['inicio']
+        op_pedido = df_pendentes.iloc[idx]['pedido']
         
-        # Controles de arrasto
+        # Mostrar detalhes da OP
         st.sidebar.markdown(f"### 🏭 {op_maquina}")
+        st.sidebar.markdown(f"**OP:** {op_pedido}")
         st.sidebar.markdown(f"**Horário atual:** {op_inicio.strftime('%d/%m %H:%M')}")
         
-        # =================================================================
-        # CORREÇÃO: Usar date_input e time_input em vez de slider com timestamp
-        # =================================================================
+        # Seletores de data e hora
         st.sidebar.markdown("#### 📅 Ajustar horário:")
         
         col1, col2 = st.sidebar.columns(2)
@@ -78,7 +78,7 @@ def criar_interface_drag_drop():
         
         # Mostrar diferença
         diferenca = novo_horario - op_inicio
-        if diferenca.total_seconds() != 0:
+        if abs(diferenca.total_seconds()) > 60:  # Só mostrar se diferença > 1 minuto
             horas = diferenca.total_seconds() / 3600
             if horas > 0:
                 st.sidebar.info(f"⏩ **+{horas:.1f} horas**")
@@ -88,18 +88,17 @@ def criar_interface_drag_drop():
         # Botão para confirmar
         if st.sidebar.button("🔄 Confirmar reprogramação", key=f"drag_confirm_{op_id}"):
             with st.spinner("Reprogramando em cascata..."):
-                reprogramar_op(op_id, novo_horario, st.session_state.user_email)
-                st.sidebar.success("✅ OP reprogramada com sucesso!")
-                st.rerun()
+                try:
+                    reprogramar_op(op_id, novo_horario, st.session_state.user_email)
+                    st.sidebar.success("✅ OP reprogramada com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Erro: {e}")
 
 def criar_botoes_ajuste_rapido():
     """
     Cria botões para ajuste rápido de horários
     """
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("## ⚡ Ajuste Rápido")
-    st.sidebar.markdown("Move TODAS as OPs pendentes:")
-    
     col1, col2 = st.sidebar.columns(2)
     
     with col1:
@@ -158,9 +157,6 @@ def mostrar_info_sidebar():
     """
     Mostra informações resumidas no sidebar
     """
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📊 Status Rápido")
-    
     df_status = carregar_dados()
     if not df_status.empty:
         pendentes = len(df_status[df_status["status"] == "Pendente"])
